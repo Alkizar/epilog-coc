@@ -1,0 +1,507 @@
+%%%%%%%%%%%%%%
+%%% Misc. Utilities
+%%%%%%%%%%%%%%
+
+empty(nil)
+refl(X, X)
+
+eq_len(Xs, Ys) :- evaluate(length(Xs), N) & evaluate(length(Ys), N)
+
+append_elt(nil, Y, [Y])
+append_elt(cons(X, Xs), Y, cons(X, Zs)) :- append_elt(Xs, Y, Zs)
+
+rev(nil, nil)
+rev(cons(X, Xs), Ws) :-  rev(Xs, Zs) & append_elt(Zs, X, Ws)
+
+%%%%%%%%%%%%%%
+%%% Structure
+%%%%%%%%%%%%%%
+
+is_term(var(X))
+is_term(app(Fun, Arg)) :- is_term(Fun) & is_term(Arg)
+is_term(abs(X, Ty, Body)) :- is_term(Ty) & is_term(Body)
+is_term(pi(X, Ty, Body)) :- is_term(Ty) & is_term(Body)
+is_term(usort(Uni)) :- is_universe(Uni)
+is_term(match(Target, Arms)) :- is_term(Target) & all_arms(Arms)
+is_term(constructor(Name, Args)) :- all_terms(Args)
+%% TODO: projections, sigma, pair, fst, snd, (let?)
+
+is_var(var(X))
+is_app(app(Fun, Arg))
+is_abs(abs(X, Ty, Body))
+is_pi(pi(X, Ty, Body))
+is_usort(usort(Uni))
+is_match(match(Target, Arms))
+is_constructor(constructor(Name, Args))
+
+is_universe(uconst(N))
+is_universe(uvar(X))
+is_universe(uadd(U, N)) :- is_universe(U)
+is_universe(umax(U, V)) :- is_universe(U) & is_universe(V)
+
+is_uconst(uconst(N)) :- number(N)
+is_uvar(uvar(X))
+is_uadd(uadd(U, N)) :- is_universe(U)
+is_umax(umax(U, V)) :- is_universe(U) & is_universe(V)
+
+is_parameter(parameter(Name, Ty)) :- is_term(Ty)
+
+is_constr_decl(constr_decl(Name, Ty)) :- is_term(Ty)
+
+is_field(field(Name, Ty)) :- is_term(Ty)
+
+is_arm(match.arm(Pattern, Body)) :- is_pattern(Pattern) & is_term(Body)
+
+is_pattern(pattern.var(X))
+is_pattern(pattern.constr(X, Patterns)) :- all_patterns(Patterns)
+is_pattern(pattern.wildcard)
+
+is_uni_param(universe.parameter(Name))
+
+all_terms(nil)
+all_terms(cons(Term, Rest)) :- is_term(Term) & all_terms(Rest)
+
+all_uni(nil)
+all_uni(cons(Uni, Rest)) :- is_universe(Uni) & all_uni(Rest)
+
+all_params(nil)
+all_params(cons(Param, Rest)) :- is_parameter(Param) & all_params(Rest)
+
+all_constr_decls(nil)
+all_constr_decls(cons(Constr, Rest)) :- is_constr_decl(Constr) & all_constr_decls(Rest)
+
+all_fields(nil)
+all_fields(cons(Field, Rest)) :- is_field(Field) & all_fields(Rest)
+
+all_arms(nil)
+all_arms(cons(Arm, Rest)) :- is_arm(Arm) & all_arms(Rest)
+
+all_patterns(nil)
+all_patterns(cons(Pattern, Rest)) :- is_pattern(Pattern) & all_patterns(Rest)
+
+all_uni_param(nil)
+all_uni_param(const(Uni_Param, Rest)) :- is_uni_param(Uni_Param) & all_uni_param(Rest)
+
+is_axiom(axiom(Name, Uni_Params, Ty)) :- all_uni_param(Uni_Params) & is_term(Ty)
+
+is_def(def(Name, Uni_Params, Params, Ty, Body)) :- all_uni_param(Uni_Params) & all_params(Params) & is_term(Ty) & is_term(Body)
+
+is_induct(inductive(Name, Uni_Params, Params, Ty, Constrs)) :- all_uni_param(Uni_Params) & all_params(Params) & is_term(Ty) & all_constr_decls(Constrs)
+
+is_struct(struct(Name, Uni_Params, Params, Ty, Fields)) :- all_uni_param(Uni_Params) & all_params(Params) & is_term(Ty) & all_fields(Fields)
+
+
+%%%%%%%%%%%%%%
+%%% Universes
+%%%%%%%%%%%%%%
+
+universe.normalize(uadd(uconst(N), M), uconst(R)) :- evaluate(plus(N, M), R)
+universe.normalize(uadd(U, N), uadd(U, N)) :- is_universe(U) & ~is_uconst(U)
+universe.normalize(umax(U, V), uconst(R)) :- universe.normalize(U, uconst(N)) & universe.normalize(V, uconst(M)) & evaluate(max(N, M), R)
+universe.normalize(umax(U, V), umax(U, V)) :- universe.normalize(U, Nf_U) & universe.normalize(V, Nf_V) & ~is_uconst(Nf_U)
+universe.normalize(umax(U, V), umax(U, V)) :- universe.normalize(U, Nf_U) & universe.normalize(V, Nf_V) & ~is_uconst(Nf_V)
+
+
+universe.normalize(U, U) :- is_universe(U) & ~is_uadd(U) & ~is_umax(U)
+
+%% TODO: are the universes assumed to be normalized already?
+universe.unify(uconst(N), uconst(N))
+universe.unify(uvar(X), uvar(X))
+universe.unify(uadd(U, N), uconst(M)) :- evaluate(minus(N, M), R) & leq(0, R) & universe.unify(U, uconst(R))
+universe.unify(uadd(U, N), uadd(V, N)) :- universe.unify(U, V)
+universe.unify(umax(U1, V1), umax(U2, V2)) :- universe.unify(U1, U2) & universe.unify(V1, V2)
+
+%% TODO: are the terms assumed to be in DB form already? I think yes
+universe.solve(var(X), var(X))
+universe.solve(app(Fun1, Arg1), app(Fun2, Arg2)) :- universe.solve(Fun1, Fun2) & universe.solve(Arg1, Arg2)
+universe.solve(abs(X, Ty1, Body1), abs(X, Ty2, Body2)) :- universe.solve(Ty1, Ty2) & universe.solve(Body1, Body2)
+universe.solve(pi(X, Ty1, Body1), pi(X, Ty2, Body2)) :- universe.solve(Ty1, Ty2) & universe.solve(Body1, Body2)
+universe.solve(usort(U), usort(V)) :- universe.unify(U, V)
+universe.solve(usort(U), usort(V)) :- universe.unify(V, U)
+%universe.solve(match(Target1, Arms1), match(Target2, Arms2)) :- universe.solve() %% TODO
+%universe.solve(constructor(Name1, Args1), constructor(Name2, Args2)) :- %% TODO
+
+
+
+%%%%%%%%%%%%%%
+%%% Contexts
+%%%%%%%%%%%%%%
+
+%% Map interface
+
+map.insert(nil, New_Key, New_Val, [map.entry(New_Key, New_Val)])
+map.insert(cons(map.entry(New_Key, Val), Map), New_Key, New_Val, cons(map.entry(New_Key, New_Val), Map))
+map.insert(cons(map.entry(Key, Val), Map), New_Key, New_Val, cons(map.entry(Key, Val), New_Map)) :- distinct(Key, New_Key) & map.insert(Map, New_Key, New_Val, New_Map)
+
+map.lookup(cons(map.entry(Key, Val), Map), Key, Val)
+map.lookup(cons(map.entry(Other_Key, Other_Val), Map), Key, Val) :- map.lookup(Map, Key, Val)
+
+map.contains(Map, Key) :- map.lookup(Map, Key, Val)
+
+%% Context interface
+
+%% TODO: fix the structure names in the context (eg. ctx.def)
+ctx.lookup_var(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Var, Term) :- map.lookup(Var_Map, Var, Term)
+ctx.extend_var(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Var, Term, ctx(New_Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx)) :- map.insert(Var_Map, Var, Term, New_Var_Map)
+ctx.extend_vars(Ctx, nil, Ctx)
+ctx.extend_vars(Ctx, cons(parameter(Name, Ty), Rest), New_Ctx) :- ctx.extend_var(Ctx, Name, Ty, Inter_Ctx) & ctx.extend_vars(Inter_Ctx, Rest, New_Ctx)
+ctx.contains_var(Ctx, Var) :- ctx.lookup_var(Ctx, Var, Term)
+
+ctx.lookup_constr(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Term) :- map.lookup(Constr_Map, Name, Term)
+ctx.extend_constr(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Term, ctx(Var_Map, Uni_Map, New_Constr_Map, Axiom_Map, Def_Map, Uni_Ctx)) :- map.insert(Constr_Map, Name, Term, New_Constr_Map)
+ctx.contains_constr(Ctx, Name) :- ctx.lookup_constr(Ctx, Name, Term)
+
+ctx.lookup_axiom(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Axiom, Term) :- map.lookup(Axiom_Map, Axiom, Term)
+ctx.extend_axiom(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Axiom, Term, ctx(Var_Map, Uni_Map, Constr_Map, New_Axiom_Map, Def_Map, Uni_Ctx)) :- map.insert(Axiom_Map, Axiom, Term, New_Axiom_Map)
+ctx.contains_axiom(Ctx, Axiom) :- ctx.lookup_axiom(Ctx, Axiom, Term)
+
+ctx.lookup_def(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Def) :- map.lookup(Def_Map, Name, Def)
+ctx.extend_def(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Uni_Params, Ty, ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, New_Def_Map, Uni_Ctx)) :- map.insert(Def_Map, Name, ctx.def(Uni_Params, Ty), New_Def_Map)
+ctx.contains_def(Ctx, Name) :- ctx.lookup_def(Ctx, Name, Def)
+
+ctx.universe_ctx(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Uni_Ctx)
+
+
+ctx.nil(ctx(nil, nil, nil, nil, nil, nil))
+
+%%%%%%%%%%%%%%
+%%% Substitution
+%%%%%%%%%%%%%%
+
+%% Replaces all occurences of the universe variable "u" with Substitution("u"), for each key "u" in the Substitution map
+% uni_subst_all(Term, Substitution, New_Term)
+uni_subst_all(usort(U), Substitution, usort(New_U)) :- uni_subst(U, Substitution, New_U)
+
+uni_subst_all(var(X), Substitution, var(X))
+uni_subst_all(app(Fun, Arg), Substitution, app(Sub_Fun, Sub_Arg)) :- uni_subst_all(Fun, Substitution, Sub_Fun) & uni_subst_all(Arg, Substitution, Sub_Arg)
+uni_subst_all(abs(X, Ty, Body), Substitution, abs(X, Sub_Ty, Sub_Body)) :- uni_subst_all(Ty, Substitution, Sub_Ty) & uni_subst_all(Body, Substitution, Sub_Body)
+uni_subst_all(pi(X, Ty, Body), Substitution, pi(X, Sub_Ty, Sub_Body)) :- uni_subst_all(Ty, Substitution, Sub_Ty) & uni_subst_all(Body, Substitution, Sub_Body)
+uni_subst_all(Term, Substitution, Term) :- ~is_usort(Term) & ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term)
+
+uni_subst(uvar(U), Substitution, New_U) :- map.lookup(Substitution, U, New_U)
+uni_subst(uvar(U), Substitution, uvar(U)) :- ~map.contains(Substitution, U)
+uni_subst(uconst(N), Substitution, uconst(N))
+uni_subst(uadd(U, N), Substitution, uadd(New_U, N)) :- uni_subst(U, Substitution, New_U)
+uni_subst(umax(U, V), Substitution, umax(New_U, New_V)) :- uni_subst(U, Substitution, New_U) & uni_subst(V, Substitution, New_V)
+
+%%%%
+is_bound(cons(X, Xs), X)
+is_bound(cons(Y, Ys), X) :- distinct(Y, X) & is_bound(Ys, X)
+
+fresh_var(X, nil, Y) :- evaluate(stringappend(X, "_"), Y)
+fresh_var(X, cons(Z, Zs), Y) :- fresh_var(X, Zs, W) & evaluate(stringappend(W, Z), Y)
+
+occurs_free(Y, var(Y))
+occurs_free(X, app(Fun, Arg)) :- occurs_free(X, Fun)
+occurs_free(X, app(Fun, Arg)) :- occurs_free(X, Arg)
+occurs_free(X, abs(Y, Ty, Body)) :- occurs_free(X, Ty)
+occurs_free(X, abs(Y, Ty, Body)) :- distinct(X, Y) & occurs_free(X, Body)
+occurs_free(X, pi(Y, Ty, Body)) :- occurs_free(X, Ty)
+occurs_free(X, pi(Y, Ty, Body)) :- distinct(X, Y) & occurs_free(X, Body)
+
+rename_var(Prev, New, var(Prev), var(New))
+rename_var(Prev, New, var(X), var(X)) :- distinct(Prev, X)
+rename_var(Prev, New, app(Fun, Arg), app(R_Fun, R_Arg)) :- rename_var(Prev, New, Fun, R_Fun) & rename_var(Prev, New, Arg, R_Arg)
+rename_var(Prev, New, abs(Prev, Ty, Body), abs(New, R_Ty, Body)) :- rename_var(Prev, New, Ty, R_Ty)
+rename_var(Prev, New, abs(X, Ty, Body), abs(X, R_Ty, R_Body)) :- distinct(Prev, X) & rename_var(Prev, New, Ty, R_Ty) & rename_var(Prev, New, Body, R_Body)
+rename_var(Prev, New, pi(Prev, Ty, Body), pi(Prev, R_Ty, Body)) :- rename_var(Prev, New, Fun, R_Fun)
+rename_var(Prev, New, pi(X, Ty, Body), pi(X, R_Ty, R_Body)) :- distinct(Prev, X) & rename_var(Prev, New, Ty, R_Ty) & rename_var(Prev, New, Body, R_Body)
+rename_var(Prev, New, match(Target, Arms), match(R_Target, R_Arms)) :- rename_var(Prev, New, Target, R_Target) & rename_var_arms(Prev, New, Arms, R_Arms)
+rename_var(Prev, New, Term, Term) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_match(Term)
+
+rename_var_arms(Prev, New, nil, nil)
+rename_var_arms(Prev, New, cons(match.arm(Pattern, Body), Rest), cons(match.arm(Pattern, Body), R_Rest)) :- pattern_binds_var(Pattern, Prev) & rename_var_arms(Prev, New, Rest, R_Rest)
+rename_var_arms(Prev, New, cons(match.arm(Pattern, Body), Rest), cons(match.arm(Pattern, R_Body), R_Rest)) :- ~pattern_binds_var(Pattern, Prev) & rename_var(Prev, New, Body, R_Body) & rename_var_arms(Prev, New, Rest, R_Rest)
+
+substitute_with_context(X, Src, var(X), Bound, Src) :- ~is_bound(Bound, X)
+substitute_with_context(X, Src, var(X), Bound, var(X)) :- is_bound(Bound, X)
+substitute_with_context(X, Src, var(Y), Bound, var(Y)) :- distinct(X, Y)
+
+substitute_with_context(X, Src, app(Fun, Arg), Bound, app(Sub_Fun, Sub_Arg)) :- substitute_with_context(X, Src, Fun, Bound, Sub_Fun) & substitute_with_context(X, Src, Arg, Bound, Sub_Arg)
+
+substitute_with_context(X, Src, abs(X, Ty, Body), Bound, abs(X, Sub_Ty, Body)) :- substitute_with_context(X, Src, Ty, Bound, Sub_Ty)
+substitute_with_context(X, Src, abs(Y, Ty, Body), Bound, abs(Fresh, Sub_Ty, Sub_Body)) :- distinct(X, Y) & occurs_free(Y, Src) & fresh_var(Y, Bound, Fresh) & rename_var(Y, Fresh, Body, New_Body) & substitute_with_context(X, Src, Ty, cons(Fresh, Bound), Sub_Ty) & substitute_with_context(X, Src, New_Body, cons(Fresh, Bound), Sub_Body)
+substitute_with_context(X, Src, abs(Y, Ty, Body), Bound, abs(Y, Sub_Ty, Sub_Body)) :- distinct(X, Y) & ~occurs_free(Y, Src) & substitute_with_context(X, Src, Ty, cons(Y, Bound), Sub_Ty) & substitute_with_context(X, Src, Body, cons(Y, Bound), Sub_Body)
+
+substitute_with_context(X, Src, pi(X, Ty, Body), Bound, pi(X, Sub_Ty, Body)) :- substitute_with_context(X, Src, Ty, Bound, Sub_Ty)
+substitute_with_context(X, Src, pi(Y, Ty, Body), Bound, pi(Fresh, Sub_Ty, Sub_Body)) :- distinct(X, Y) & occurs_free(Y, Src) & fresh_var(Y, Bound, Fresh) & rename_var(Y, Fresh, Body, New_Body) & substitute_with_context(X, Src, Ty, cons(Fresh, Bound), Sub_Ty) & substitute_with_context(X, Src, New_Body, cons(Fresh, Bound), Sub_Body)
+substitute_with_context(X, Src, pi(Y, Ty, Body), Bound, pi(Y, Sub_Ty, Sub_Body)) :- distinct(X, Y) & ~occurs_free(Y, Src) & substitute_with_context(X, Src, Ty, cons(Y, Bound), Sub_Ty) & substitute_with_context(X, Src, Body, cons(Y, Bound), Sub_Body)
+
+substitute_with_context(X, Src, match(Target, Arms), Bound, match(Sub_Target, Sub_Arms)) :- substitute_with_context(X, Src, Target, Bound, Sub_Target) & substitute_arms_with_context(X, Src, Arms, Bound, Sub_Arms)
+
+substitute_with_context(X, Src, Tgt, Bound, Tgt) :- ~is_var(Tgt) & ~is_app(Tgt) & ~is_abs(Tgt) & ~is_pi(Tgt) & ~is_match(Tgt)
+
+substitute_arms_with_context(X, Src, nil, Bound, nil)
+substitute_arms_with_context(X, Src, cons(match.arm(Pattern, Body), Rest), Bound, cons(match.arm(Pattern, Body), Sub_Rest)) :- pattern_binds_var(Pattern, X) & substitute_arms_with_context(X, Src, Rest, Bound, Sub_Rest)
+substitute_arms_with_context(X, Src, cons(match.arm(Pattern, Body), Rest), Bound, cons(match.arm(Pattern, Sub_Body), Sub_Rest)) :- ~pattern_binds_var(Pattern, X) & substitute_with_context(X, Src, Body, Bound, Sub_Body) & substitute_arms_with_context(X, Src, Rest, Bound, Sub_Rest)
+
+pattern_binds_var(pattern.var(X), X)
+pattern_binds_var(pattern.constr(Name, Patterns), X) :- pattern_binds_var_any(Patterns, X)
+
+pattern_binds_var_any(cons(Pattern, Rest), X) :- pattern_binds_var(Pattern, X)
+pattern_binds_var_any(cons(Pattern, Rest), X) :- pattern_binds_var_rec(Rest, X)
+
+substitute(X, Src, Tgt, Result) :- substitute_with_context(X, Src, Tgt, nil, Result)
+
+
+%%%%%%%%%%%%%%
+%%% Equivalence
+%%%%%%%%%%%%%%
+
+%% Convert variable names to debruijn indices
+
+%alpha_normalize_rec(var(X), Db_Ctx, N, var(M)) :- map.lookup(Db_Ctx, X, M)
+%alpha_normalize_rec(var(X), Db_Ctx, N, var(X)) :- ~map.contains(Db_Ctx, X)    % Free variable
+%alpha_normalize_rec(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg)) :- alpha_normalize_rec(Fun, Db_Ctx, N, Db_Fun) & alpha_normalize_rec(Arg, Db_Ctx, N, Db_Arg)
+%alpha_normalize_rec(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body)) :- alpha_normalize_rec(Ty, Db_Ctx, N, Db_Ty) & 
+
+alpha_normalize_rec(var(X), Db_Ctx, N, var(M)) :- map.lookup(Db_Ctx, X, M)
+alpha_normalize_rec(var(X), Db_Ctx, N, var(X)) :- ~map.contains(Db_Ctx, X)    % Free variable
+alpha_normalize_rec(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg)) :- alpha_normalize_rec(Fun, Db_Ctx, N, Db_Fun) & alpha_normalize_rec(Arg, Db_Ctx, N, Db_Arg)
+alpha_normalize_rec(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body)) :- evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & alpha_normalize_rec(Ty, Ext_Db_Ctx, M, Db_Ty) & alpha_normalize_rec(Body, Ext_Db_Ctx, M, Db_Body)
+alpha_normalize_rec(pi(X, Ty, Body), Db_Ctx, N, pi(M, Db_Ty, Db_Body)) :- evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & alpha_normalize_rec(Ty, Ext_Db_Ctx, M, Db_Ty) & alpha_normalize_rec(Body, Ext_Db_Ctx, M, Db_Body)
+% alpha_normalize_rec(usort(U), Db_Ctx, N, usort(Db_U)) :- alpha_normalize_uni(U, Db_Ctx, N, Db_U) %% TODO
+alpha_normalize_rec(usort(U), Db_Ctx, N, usort(U)) %% TODO: delete this
+% alpha_normalize_rec(match()) %% TODO
+% alpha_normalize_rec(constructor()) %% TODO
+alpha_normalize_rec(Term, Db_Ctx, N, Term) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term)
+
+%% TODO: check that this behaves correctly for universes!
+%% TODO: finish this
+% alpha_normalize_uni(uconst(M), Db_Ctx, N, uconst(M))
+% alpha_normalize_uni(uvar(X), Db_Ctx, N, uvar(M)) :- map.lookup(Db_Ctx, X, M)
+% alpha_normalize_uni(uadd(U, M), Db_Ctx, N, uadd(Db_U, M)) :- alpha_normalize_uni(U, Db_Ctx, N, Db_U)
+% alpha_normalize_uni(umax(U, V), Db_Ctx, N, umax)
+
+alpha_normalize(Term, Db_Term) :- alpha_normalize_rec(Term, nil, 0, Db_Term)
+
+alpha_equiv(Term1, Term2) :- alpha_normalize(Term1, Db) & alpha_normalize(Term2, Db)
+
+%% app(Fun, Arg)
+normalize(app(Fun, Arg), Ctx, app(Nf_Fun, Nf_Arg)) :- normalize(Fun, Ctx, Nf_Fun) & normalize(Arg, Ctx, Nf_Arg) & ~is_abs(Nf_Fun)
+normalize(app(Fun, Arg), Ctx, Nf) :- normalize(Fun, Ctx, abs(Nf_X, Nf_Ty, Nf_Body)) & normalize(Arg, Ctx, Nf_Arg) & substitute(Nf_X, Nf_Arg, Nf_Body, Nf)
+
+%% abs(X, Ty, Body) 
+normalize(abs(X, Ty, Body), Ctx, Nf_Fun) :- normalize(Ty, Ctx, Nf_Ty) & ctx.extend_var(Ctx, X, Nf_Ty, Ext_Ctx) & normalize(Body, Ext_Ctx, app(Nf_Fun, var(Nf_Var))) & ~occurs_free(Nf_Var, Nf_Fun)
+normalize(abs(X, Ty, Body), Ctx, abs(X, Nf_Ty, Nf_Body)) :- normalize(Ty, Ctx, Nf_Ty) & ctx.extend_var(Ctx, X, Nf_Ty, Ext_Ctx) & normalize(Body, Ext_Ctx, Nf_Body) & ~is_app(Nf_Body)
+normalize(abs(X, Ty, Body), Ctx, abs(X, Nf_Ty, app(Nf_Fun, var(Nf_Var)))) :- normalize(Ty, Ctx, Nf_Ty) & ctx.extend(Ctx, X, Nf_Ty, Ext_Ctx) & normalize(Body, Ext_Ctx, app(Nf_Fun, var(Nf_Var))) & occurs_free(Nf_Var, Nf_Fun)
+
+%% pi(X, Ty, Body)
+normalize(pi(X, Ty, Body), Ctx, pi(X, Nf_Ty, Nf_Body)) :- normalize(Ty, Ctx, Nf_Ty) & ctx.extend_var(Ctx, X, Nf_Ty, Ext_Ctx) & normalize(Body, Ext_Ctx, Nf_Body)
+
+%% var(X)
+normalize(var(X), Ctx, Def) :- ctx.lookup_axiom(Ctx, X, Def)
+normalize(var(X), Ctx, var(X)) :- ~ctx.contains_axiom(Ctx, X)
+
+%% Other terms
+normalize(Term, Ctx, Term) :- ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_var(Term)
+
+
+%% Checks whether the inputs are definitionally equal in the provided context
+%% TODO: make sure normalize also handles alpha conversion
+def_eq(Term1, Term2, Ctx) :- normalize(Term1, Ctx, Nf1) & normalize(Term2, Ctx, Nf2) & unify(Nf1, Nf2) & normalize(Nf1, Ctx, Nff1) & normalize(Nf1, Ctx, Nff2) & alpha_equiv(Nff1, Nff2)
+% TODO: unify, alpha_equiv
+
+
+%% TODO: need to do this in BFS order to ensure termination when meta variables are involved!
+
+max_depth(4)
+
+iter_depth(Depth, Succ_Depth) :- evaluate(plus(Depth, 1), Succ_Depth) & max_depth(Max) & leq(Succ_Depth, Max)
+
+test(var(X), Db_Ctx, N, var(M), Depth) :- map.lookup(Db_Ctx, X, M)
+test(var(X), Db_Ctx, N, var(X), Depth) :- ~map.contains(Db_Ctx, X)    % Free variable
+test(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg), Depth) :- iter_depth(Depth, Succ_Depth) & test(Fun, Db_Ctx, N, Db_Fun, Succ_Depth) & test(Arg, Db_Ctx, N, Db_Arg, Succ_Depth)
+test(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & test(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & test(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
+test(pi(X, Ty, Body), Db_Ctx, N, pi(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & test(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & test(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
+test(usort(U), Db_Ctx, N, usort(U), Depth) %% TODO: delete this
+test(Term, Db_Ctx, N, Term, Depth) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term)
+
+alpha_test(Term, Db_Term) :- test(Term, nil, 0, Db_Term, 0)
+
+% TODO this appears to work! test -> alpha_normalize_rec, alpha_test -> alpha_normalize
+
+
+%%%%%%%%%%%%%%
+%%% Unification
+%%%%%%%%%%%%%%
+
+
+%% TODO: I think alpha conversion to debruijn needs to be guaranteed before attempts to unify; maybe handle this during parsing? jk just do this in the calls to unify (eg alpha -> unify)
+
+% unify(Term1, Term2) :- is_term(Term1) & is_term(Term2) & alpha_equiv(Term1, Term2) %% TODO: is this correct?
+
+% unify(Term1, Term2) :- is_pi(Term1) & is_pi(Term2) & alpha_equiv(Term1, Term2)
+% unify(Term1, Term2) :- is_var(Term1) & is_var(Term2) & alpha_equiv(Term1, Term2)
+% unify(Term1, Term2) :- is_usort(Term1) & is_usort(Term2) & alpha_equiv(Term1, Term2)
+% unify(Term1, Term2) :- is_term(Term1) & is_term(Term2) & alpha_equiv(Term1, Term2)
+
+unify(Term1, Term2) :- alpha_test(Term1, Db_Term1) & alpha_test(Term2, Db_Term2) & universe.solve(Db_Term1, Db_Term2)
+unify(Term1, Term2) :- alpha_test(Term2, Db_Term2) & alpha_test(Term1, Db_Term1) & universe.solve(Db_Term2, Db_Term1)
+
+%% TODO ^
+
+% unify(abs("x", U, var("x")), abs("y", pi("a", usort(uconst(1)), var("a")), var("y")))
+
+%%%%%%%%%%%%%%
+%%% Type Checking
+%%%%%%%%%%%%%%
+
+
+%% Helpers
+% checks if a term is a type
+is_type(usort(U)) :- is_universe(U)
+
+% constructs a pi type from a vector of parameters and a body type
+% e.g. make_pi_type([(x : A), (y : B)], C, ?) unifies to Pi (x : A). Pi (y : B). C
+make_pi_type(nil, Body_Ty, Body_Ty)
+make_pi_type(cons(parameter(Name, Ty), Rest), Body_Ty, pi(Name, Ty, Acc_Ty)) :- make_pi_type(Rest, Body_Ty, Acc_Ty)
+
+% constructs a lambda term from a vector of parameters and a body
+% e.g. make_abs([(x : A), (y : B)], t, ?) unifies to \(x : A). \(y : B). t
+make_abs(nil, Body, Body)
+make_abs(cons(parameter(Name, Ty), Rest), Body, abs(Name, Ty, Acc_Abs)) :- make_abs(Rest, Body, Acc_Abs)
+
+%% Check module
+check_module(Module) :- ctx.nil(Ctx) & check_module_with_context(Module, Ctx)
+
+check_module_with_context(nil, Ctx)
+check_module_with_context(cons(Declaration, Rest), Ctx) :- check_declaration(Declaration, Ctx, New_Ctx) & check_module_with_context(Rest, New_Ctx)
+
+
+%% Check axiom
+check_declaration(axiom(Name, nil, Ty), Ctx, New_Ctx) :- infer(Ty, Ctx, Sort_Ty) & is_type(Sort_Ty) & ctx.extend_axiom(Ctx, Name, Ty, New_Ctx)
+check_declaration(axiom(Name, cons(Uni, Rest), Ty), Ctx, New_Ctx) :- infer(Ty, Ctx, Sort_Ty) & is_type(Sort_Ty) & ctx.extend_def(Ctx, Name, cons(Uni, Rest), Ty, New_Ctx)
+
+%% Check definition
+check_declaration(def(Name, nil, Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & infer(Ty, Uni_Var_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_pi_type(Params, Ty, Def_Ty) & ctx.extend_axiom(Uni_Var_Ctx, Name, Def_Ty, Rec_Ctx) & make_abs(Params, Body, Lambda) & check(Lambda, Def_Ty, Rec_Ctx) & ctx.extend_axiom(Ctx, Name, Def_Ty, New_Ctx)
+
+%% TODO: I don't think we need the universe context here actually??
+%check_declaration(def(Name, cons(Uni, Uni_Params), Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & infer(Ty, Uni_Var_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_pi_type(Params, Ty, Def_Ty) & ctx.extend_axiom(Uni_Var_Ctx, Name, Def_Ty, Rec_Ctx) & make_abs(Params, Body, Lambda) & check(Lambda, Def_Ty, Rec_Ctx) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Ty, New_Ctx)
+check_declaration(def(Name, cons(Uni, Uni_Params), Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & infer(Ty, Uni_Var_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_pi_type(Params, Ty, Def_Ty) & ctx.extend_axiom(Uni_Var_Ctx, Name, Def_Ty, Rec_Ctx) & make_abs(Params, Body, Lambda) & check(Lambda, Def_Ty, Rec_Ctx) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Def_Ty, New_Ctx)
+%% TODO: ctx.extend_unis
+
+%% Check inductive
+check_declaration(inductive(Name, nil, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_axiom(Ctx, Name, Ind_Ty, Ext_Ctx) & ctx.extend_axiom(Uni_Var_Ctx, Name, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, nil, Params, New_Ctx)
+
+check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+
+check_constrs(nil, Ctx, UV_Ctx, Uni_Params, Params, Ctx)
+check_constrs(cons(constr_decl(Name, Ty), Rest), Ctx, UV_Ctx, nil, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.add_constr(Ctx, New, Constr_Ty, Inter_Ctx) & check_constrs(Rest, Inter_Ctx, UV_Ctx, nil, Params, New_Ctx)
+check_constrs(cons(constr_decl(Name, Ty), Rest), Ctx, UV_Ctx, Uni_Params, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.add_def(Ctx, Name, Uni_Params, Constr_Ty, Inter_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+
+%% Check structure
+
+%check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Ext_Ctx, Params_Ctx, ) %% TODO: finish
+
+
+%% Check terms
+
+check(abs(X, Ty, Body), pi(Y, Expected_Ty, Expected_Body), Ctx) :- def_eq(Ty, Expected_Ty, Ctx) & ctx.extend_var(Ctx, X, Ty, Ext_Ctx) & substitute(Y, var(X), Expected_Body, R_Expected_Body) & check(Body, R_Expected_Body, Ext_Ctx)
+check(Term, Expected_Ty, Ctx) :- ~is_abs(Term) & infer(Term, Ctx, Inferred_Ty) & def_eq(Inferred_Ty, Expected_Ty, Ctx)
+
+%%%%%%%%%%%%%%
+%%% Type Inference
+%%%%%%%%%%%%%%
+
+%% Preprocessing for universe polymorphism
+fresh_uni_params(Term, Uni_Params, New_Term) :- make_fresh_uni_param_subst(Uni_Params, nil, S) & uni_subst_all(Term, S, New_Term)
+
+%% Creates a substitution for each universe parameter using a fresh meta variable
+make_fresh_uni_param_subst(nil, Substitution, Substitution)
+make_fresh_uni_param_subst(cons(U, Rest), Substitution, New_Substitution) :- map.insert(Substitution, U, Fresh_U, Inter_Substitution) & make_fresh_uni_param_subst(Rest, Inter_Substitution, New_Substitution)
+
+infer_app(pi(X, Param_Ty, Body_Ty), Arg, Ctx, Type) :- infer(Arg, Ctx, Arg_Ty) & unify(Arg_Ty, Param_Ty) & substitute(X, Arg, Body_Ty, Type)
+%% TODO: unify
+
+
+%% TODO: do we have to "apply universe substitutions" here? see pi_rule
+infer_pi(uconst(0), U, Ctx, U)
+infer_pi(U, uconst(0), Ctx, U)
+infer_pi(U, V, Ctx, umax(U, V)) :- distinct(U, uconst(0)) & distinct(V, uconst(0))
+
+
+infer_uni(uconst(N), uconst(M)) :- evaluate(plus(N, 1), M)
+infer_uni(U, uadd(U, 1)) :- ~is_uconst(U)
+
+%% Infer variable type
+infer(var(X), Ctx, Type) :- ctx.lookup_var(Ctx, X, Type)
+infer(var(X), Ctx, New_Ty) :- ~ctx.contains_var(Ctx, X) & ctx.lookup_def(Ctx, X, ctx.def(Uni_Params, Ty)) & fresh_uni_params(Ty, Uni_Params, New_Ty)
+infer(var(X), Ctx, Type) :- ~ctx.contains_var(Ctx, X) & ~ctx.contains_def(Ctx, X) & ctx.lookup_axiom(Ctx, X, Type)
+infer(var(X), Ctx, Type) :- ~ctx.contains_var(Ctx, X) & ~ctx.contains_def(Ctx, X) & ~ctx.contains_axiom(Ctx, X) & ctx.contains_constr(Ctx, X, Type)
+
+
+%% Infer application type
+infer(app(var(Name), Arg), Ctx, Type) :- ctx.lookup_def(Ctx, Name, ctx.def(Uni_Params, Ty)) & ~empty(Uni_Params) & infer(constructor(Name, [Arg]), Ctx, Type)
+
+infer(app(Fun, Arg), Ctx, Type) :- infer(Fun, Ctx, Fun_Ty) & infer_app(Fun_Ty, Arg, Ctx, Type)
+
+
+%% Infer abstraction type
+infer(abs(X, Ty, Body), Ctx, pi(X, Ty, Body_Ty)) :- infer(Ty, Ctx, Sort_Ty) & is_type(Sort_Ty) & ctx.extend_var(Ctx, X, Ty, Ext_Ctx) & infer(Body, Ext_Ctx, Body_Ty)
+
+
+%% Infer pi type
+infer(pi(X, Ty, Body), Ctx, usort(Nf_Pi_Uni)) :- infer(Ty, Ctx, usort(Ty_Uni)) & ctx.extend_var(Ctx, X, Ty, Ext_Ctx) & infer(Body, Ext_Ctx, usort(Body_Uni)) & infer_pi(Ty_Uni, Body_Uni, Ctx, Pi_Uni) & universe.normalize(Pi_Uni, Nf_Pi_Uni)
+
+
+%% Infer usort type
+infer(usort(U), Ctx, usort(Nf_U)) :- infer_uni(U, R_U) & universe.normalize(R_U, Nf_U)
+
+
+%% Infer constructor type
+infer(constructor(Name, Args), Ctx, R_Ty) :- ctx.lookup_constr(Ctx, Name, Ty) & infer_constr_args(Args, Ty, Ctx, R_Ty)
+infer(constructor(Name, Args), Ctx, R_Ty) :- ~ctx.contains_constr(Ctx, Name) & ctx.lookup_def(Ctx, Name, ctx.def(Uni_Params, Ty)) & fresh_uni_params(Ty, Uni_Params, New_Ty) & infer_constr_args(Args, New_Ty, Ctx, R_Ty)
+
+infer_constr_args(nil, Constr_Ty, Ctx, Constr_Ty)
+infer_constr_args(cons(Arg, Rest), pi(Param, Param_Ty, Body_Ty), Ctx, R_Ty) :- infer(Arg, Ctx, Arg_Ty) & def_eq(Arg_Ty, Param_Ty, Ctx) & substitute(Param, Arg, Body_Ty, R_Body_Ty) & infer_constr_args(Rest, R_Body_Ty, Ctx, R_Ty)
+
+
+%% Infer match type
+%% TODO: parsing should guarantee arms are nonempty
+% match.arm(Pattern, Body)
+
+% Single arm case
+infer(match(Target, Arms), Ctx, Arms_Ty) :- infer(Target, Ctx, Target_Ty) & infer_arms(Arms, Target_Ty, Ctx, Arms_Ty)
+
+infer_arms([match.arm(Pattern, Body)], Target_Ty, Ctx, Arm_Ty) :- check_pattern(Pattern, Target_Ty, Ctx, Pattern_Ctx) & infer(Body, Pattern_Ctx, Arm_Ty)
+infer_arms(cons(match.arm(Pattern, Body), Rest), Target_Ty, Ctx, Arm_Ty) :- infer_arms([match.arm(Pattern, Body)], Target_Ty, Ctx, Arm_Ty) & infer_arms(Rest, Target_Ty, Ctx, Rest_Ty) & def_eq(Arm_Ty, Rest_Ty)
+%% ^ TODO: do we need create_fresh_branch_context? or can we use Pattern_Ctx directly?
+
+check_pattern(pattern.var(X), Expected_Ty, Ctx, New_Ctx) :- ctx.lookup_constr(Ctx, X, Ty) & check_pattern(pattern.constr(X, nil), Ctx, Expected_Ty, New_Ctx)
+check_pattern(pattern.var(X), Expected_Ty, Ctx, New_Ctx) :- ~ctx.contains_constr(Ctx, X) & ctx.extend_var(Ctx, X, Expected_Ty, New_Ctx)
+check_pattern(pattern.wildcard, Expected_Ty, Ctx, Ctx)
+check_pattern(pattern.constr(Name, Patterns), Expected_Ty, Ctx, New_Ctx) :- ctx.lookup_constr(Ctx, Name, Ty) & spec_constr_ty(Ty, Expected_Ty, Spec_Ty) & get_constr_out(Spec_Ty, Out_Ty) & def_eq(Spec_Ty, Expected_Ty, Ctx) & get_constr_args(Spec_Ty, Pattern_Tys) & check_all_patterns(Patterns, Pattern_Tys, Ctx, New_Ctx)
+
+%% TODO: def_eq
+
+check_pattern(pattern.constr(Name, Patterns), Expected_Ty, Ctx, New_Ctx) :- ~ctx.contains_constr(Ctx, Name) & ctx.lookup_def(Ctx, Name, ctx.def(Uni_Params, Ty)) & fresh_uni_params(Ty, Uni_Params, New_Ty) & get_constr_out(New_Ty, Out_Ty) & unify(Out_Ty, Expected_Ty) & get_constr_args(Spec_Ty, Pattern_Tys) & check_all_patterns(Patterns, Pattern_Tys, Ctx, New_Ctx)
+
+
+check_all_patterns(nil, nil, Ctx, Ctx)
+check_all_patterns(cons(Pattern, Rest), cons(Pattern_Ty, Rest_Ty), Ctx, New_Ctx) :- check_pattern(Pattern, Pattern_Ty, Ctx, Inter_Ctx) & check_all_patterns(Rest, Rest_Ty, Inter_Ctx, New_Ctx)
+
+
+spec_constr_ty(Ty, Expected_Ty, Ty) :- get_pi_type_params(Ty, nil)
+spec_constr_ty(Ty, Expected_Ty, Spec_Ty) :- get_pi_type_params(Ty, cons(Type_Param, Rest)) & get_app_args(Expected_Ty, Type_Args) & apply_spec(Ty, cons(Type_Param, Rest), Type_Args, Spec_Ty)
+
+get_pi_type_params(pi(X, usort(U), Body), cons(X, Type_Params)) :- get_pi_type_params(Body, Type_Params)
+get_pi_type_params(pi(X, Ty, Body), nil) :- ~is_usort(Ty)
+get_pi_type_params(Ty, nil) :- ~is_pi(Ty)
+
+get_app_args_rev(app(Fun, Arg), cons(Arg, Type_Args)) :- get_app_args_rev(Fun, Type_Args)
+get_app_args_rev(Term, nil) :- ~is_app(Term)
+
+get_app_args(Term, Args) :- get_app_args_rev(Term, Rev_Args) & rev(Rev_Args, Args)
+
+apply_spec(Ty, nil, Type_Args, Ty)
+apply_spec(pi(Ty_Param, Ty, Body), cons(Ty_Param, Rest_Param), cons(Ty_Arg, Rest_Arg), Spec_Body) :- substitute(Ty_Param, Ty_Arg, Body, Sub_Body) & apply_spec(Sub_Body, Rest_Param, Rest_Arg, Spec_Body)
+apply_spec(pi(X, Ty, Body), cons(Ty_Param, Rest_Param), cons(Ty_Arg, Rest_Arg), Spec_Ty) :- distinct(X, Ty_Param) & apply_spec(pi(X, Ty, Body), Rest_Param, Rest_Arg, Spec_Ty)
+apply_spec(Ty, cons(Ty_Param, Rest_Param), cons(Ty_Arg, Rest_Arg), Spec_Ty) :- ~is_pi(Ty) & apply_spec(Ty, Rest_Param, Rest_Arg, Spec_Ty)
+
+get_constr_out(pi(X, Ty, Body), Out_Ty) :- get_constr_out(Body, Out_Ty)
+get_constr_out(Constr_Ty, Constr_Ty) :- ~is_pi(Constr_Ty)
+
+get_constr_args(pi(X, usort(U), Body), cons(usort(U), Arg_Tys)) :- get_constr_args(Body, Arg_Tys)
+get_constr_args(pi(X, Ty, Body), Arg_Tys) :- ~is_usort(Ty) & get_constr_args(Body, Arg_Tys)
+get_constr_args(Constr_Ty, nil) :- ~is_pi(Constr_Ty)

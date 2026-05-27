@@ -1,0 +1,4 @@
+dataset: coc_data.hdf
+ruleset: coc_rules.hrf
+query: ctx.nil(Ctx) & check_declaration(declaration.def("id",["u"],[parameter("a",usort(uadd(uvar("u"),1))),parameter("x",var("a"))],var("a"),var("x")), Ctx, New_Ctx)
+dotrace: false
