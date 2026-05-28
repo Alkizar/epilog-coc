@@ -118,10 +118,14 @@ universe.solve(abs(X, Ty1, Body1), abs(X, Ty2, Body2)) :- universe.solve(Ty1, Ty
 universe.solve(pi(X, Ty1, Body1), pi(X, Ty2, Body2)) :- universe.solve(Ty1, Ty2) & universe.solve(Body1, Body2)
 universe.solve(usort(U), usort(V)) :- universe.unify(U, V)
 universe.solve(usort(U), usort(V)) :- universe.unify(V, U)
-%universe.solve(match(Target1, Arms1), match(Target2, Arms2)) :- universe.solve() %% TODO
-%universe.solve(constructor(Name1, Args1), constructor(Name2, Args2)) :- %% TODO
+universe.solve(match(Target1, Arms1), match(Target2, Arms2)) :- universe.solve(Target1, Target2) & universe.solve_arms(Arms1, Arms2)
+universe.solve(constructor(Name1, Args1), constructor(Name2, Args2)) :- universe.solve_args(Args1, Args2)
 
+universe.solve_arms(nil, nil)
+universe.solve_arms(cons(match.arm(Pattern1, Body1), Rest1), cons(match.arm(Pattern2, Body2), Rest2)) :- universe.solve(Body1, Body2) & universe.solve_arms(Rest1, Rest2)
 
+universe.solve_args(nil, nil)
+universe.solve_args(cons(Arg1, Rest1), cons(Arg2, Rest2)) :- universe.solve(Arg1, Arg2) & universe.solve_args(Rest1, Rest2)
 
 %%%%%%%%%%%%%%
 %%% Contexts
@@ -362,6 +366,11 @@ make_pi_type(cons(parameter(Name, Ty), Rest), Body_Ty, pi(Name, Ty, Acc_Ty)) :- 
 make_abs(nil, Body, Body)
 make_abs(cons(parameter(Name, Ty), Rest), Body, abs(Name, Ty, Acc_Abs)) :- make_abs(Rest, Body, Acc_Abs)
 
+% constructs an app term from a function name and a vector of parameters to which the function is to be applied
+% e.g. make_app(f, [(x : A), (y : B)], ?) unifies to f x y
+make_app(Fun, nil, Fun)
+make_app(Fun, cons(parameter(Name, Ty), Rest), App) :- make_app(app(Fun, var(Name)), Rest, App)
+
 %% Check module
 check_module(Module) :- ctx.nil(Ctx) & check_module_with_context(Module, Ctx)
 
@@ -391,9 +400,10 @@ check_constrs(cons(constr_decl(Name, Ty), Rest), Ctx, UV_Ctx, nil, Params, New_C
 check_constrs(cons(constr_decl(Name, Ty), Rest), Ctx, UV_Ctx, Uni_Params, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.add_def(Ctx, Name, Uni_Params, Constr_Ty, Inter_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
 
 %% Check structure
+check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx) %% TODO: finish
 
-%check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Ext_Ctx, Params_Ctx, ) %% TODO: finish
-
+check_fields(nil, Params, Param_Ctx, Ctx, Ctx)
+check_fields(cons(field(Name, Ty), Rest), Params, Param_Ctx, Ctx, New_Ctx) :- infer(Ty, Param_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_app(Name, Params, App) & make_pi_type(Params, pi("struct_param", App, Ty), Proj_Ty) & ctx.extend_axiom(Ctx, Name, Proj_Ty, Inter_Ctx) & check_fields(Rest, Params, Param_Ctx, Inter_Ctx, New_Ctx)
 
 %% Check terms
 
