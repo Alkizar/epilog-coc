@@ -2,6 +2,8 @@
 
 //const data = fs.readFileSync('example.txt', 'utf8');
 
+// TODO: delete this file
+
 var lambda = [];
 var library = [];
 

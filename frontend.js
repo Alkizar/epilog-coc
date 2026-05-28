@@ -1,5 +1,7 @@
 import { parse } from "./parser.js";
 
+// TODO: rename this file
+
 const button = document.getElementById('checkButton');
 const input = document.getElementById('input');
 const output = document.getElementById('output');
@@ -24,7 +26,7 @@ button.addEventListener('click', () => {
         const ast = parse(inputText);
 
         
-        output.textContent = ast; //JSON.stringify(ast, null, 2); // TODO
+        //output.textContent = ast; //JSON.stringify(ast, null, 2); // TODO
 
         var result = compfindx(read("yes"), read(`check_module([` + ast + `])`), lambda, library);
         alert(result);

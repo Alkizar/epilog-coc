@@ -2,13 +2,24 @@
 <html>
 <head>
     <title>Calculus of Constructions</title>
+    <link rel="stylesheet" href="styles.css">
     <script src="http://epilog.stanford.edu/javascript/epilog.js"></script>
     <script type="module" src="frontend.js"></script>
 </head>
 <body>
-    <h1>Calculus of Constructions</h1>
-    <textarea id="input" name="input" rows="20" cols="80"></textarea>
-    <button id="checkButton">Typecheck</button>
-    <pre id="output">blah</pre>
+    <div class="container">
+        <h1>Calculus of Constructions</h1>
+
+        <textarea
+            id="input"
+            name="input"
+            spellcheck="false"
+        ></textarea>
+
+        <div class="controls">
+            <button id="checkButton">
+                Typecheck
+            </button>
+        </div>
 </body>
 </html>
