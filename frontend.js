@@ -20,6 +20,23 @@ document.addEventListener('DOMContentLoaded', (event) => {
     initialize();
 })
 
+// Allow tabs in input by intercepting \t
+// Source: https://stackoverflow.com/questions/6637341/use-tab-to-indent-in-textarea
+input.addEventListener('keydown', function(e) {
+  if (e.key == 'Tab') {
+    const tab_output = "  ";    // This is what \t will manifest as
+
+    e.preventDefault();
+    var start = this.selectionStart;
+    var end = this.selectionEnd;
+
+    this.value = this.value.substring(0, start) + tab_output + this.value.substring(end);
+
+    this.selectionStart = start + tab_output.length;
+    this.selectionEnd = start + tab_output.length;
+  }
+});
+
 button.addEventListener('click', () => {
     try {
         const inputText = input.value;
@@ -32,6 +49,10 @@ button.addEventListener('click', () => {
         alert(result);
     } catch (e) {
         //output.textContent = e.message;
+
+        // InternalError => typecheck error, infinite recursion in logic program
+        // SyntaxError => parse error
+        alert(e.name);
         alert(e.message);
     }
 });

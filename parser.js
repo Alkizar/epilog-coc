@@ -283,7 +283,7 @@ function peg$parse(input, options) {
   function peg$f10(name, type) {    return make_constructor("field", name, type);  }
   function peg$f11(x, type, val, body) {    return make_constructor("let", x, type, val, body);  }
   function peg$f12(term, arms) {    return make_constructor("match", term, make_list(arms));  }
-  function peg$f13(pattern, body) {    return make_constructor("pattern", pattern, body);  }
+  function peg$f13(pattern, body) {    return make_constructor("match.arm", pattern, body);  }
   function peg$f14(name, args) {    return make_constructor("pattern.constructor", name, make_list(args));  }
   function peg$f15(name) {    return make_constructor("pattern.constructor", name, make_list());  }
   function peg$f16(x) {

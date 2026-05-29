@@ -1,3 +1,23 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Calculus of Constructions
+%%%%%%%%%%%%%%
+%%% Implementing a dependent type checker in Epilog
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% TODO: description of rules here
+
+%%%%%%%%%%%%%%
+%%% References
+%%%%%%%%%%%%%%
+%% Epilog and Logic Programming:
+% - http://epilog.stanford.edu/documentation/epilogjs/guide.php
+% - http://logicprogramming.stanford.edu/public/index.php
+%% Dependent Type Theory
+% - https://www.danielgratzer.com/papers/type-theory-book.pdf
+%% Calculus of Constructions
+% - https://inria.hal.science/hal-01094195v1/document
+% - https://sdiehl.github.io/typechecker-zoo/coc/calculus-of-constructions.html
+
 %%%%%%%%%%%%%%
 %%% Misc. Utilities
 %%%%%%%%%%%%%%
@@ -393,7 +413,11 @@ check_declaration(def(Name, cons(Uni, Uni_Params), Params, Ty, Body), Ctx, New_C
 %% Check inductive
 check_declaration(inductive(Name, nil, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_axiom(Ctx, Name, Ind_Ty, Ext_Ctx) & ctx.extend_axiom(Uni_Var_Ctx, Name, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, nil, Params, New_Ctx)
 
-check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+
+%% TODO: same here, no need for extend_unis
+%check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+
 
 check_constrs(nil, Ctx, UV_Ctx, Uni_Params, Params, Ctx)
 check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, nil, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.extend_constr(Ctx, Name, Constr_Ty, Inter_Ctx) & check_constrs(Rest, Inter_Ctx, UV_Ctx, nil, Params, New_Ctx)

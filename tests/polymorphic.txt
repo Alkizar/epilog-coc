@@ -1,0 +1,5 @@
+def id.{u} (A : Sort (u+1)) (x : A) : A := x
+def id_at_type : (A : Type) -> A -> A := id
+
+def const.{u, v, w} (A : Sort (u+1)) (B : Sort (v+1)) (x : A) (y : B) : A := x
+def compose.{u, v, w} (A : Sort (u+1)) (B : Sort (v+1)) (C : Sort (w+1)) (g : B -> C) (f : A -> B) (x : A) : C := g (f x)

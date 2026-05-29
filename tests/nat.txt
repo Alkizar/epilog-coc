@@ -1,0 +1,11 @@
+inductive Nat : Type where
+  | zero : Nat
+  | succ : Nat -> Nat
+
+def add (n : Nat) (m : Nat) : Nat := match n with
+  | zero => m
+  | succ(k) => succ (add k m)
+
+def delta (n : Nat) : Nat := match n with
+  | zero => zero
+  | succ(_) => succ zero

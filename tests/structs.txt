@@ -1,0 +1,18 @@
+struct Pair.{u} (A : Sort (u+1)) (B : Sort (u+1)) : Sort (u+1) where
+  (fst : A)
+  (snd : B)
+
+struct Bipair.{u, v} (A : Sort (u+1)) (B : Sort (v+1)) : Sort max(u+1,v+1) where
+  (fst : A)
+  (snd : B)
+
+inductive Nat : Type where
+  | zero : Nat
+  | succ : Nat -> Nat
+
+struct Point : Type where (x : Nat) (y : Nat)
+
+axiom point : Point
+
+axiom point_fst : Point -> Nat
+def get_x : Nat := point_fst point

@@ -1,0 +1,8 @@
+inductive Pair (A : Type) (B : Type) : Type where
+  | mkpair : A -> B -> Pair A B
+
+def fst (A : Type) (B : Type) (p : Pair A B) : A := match p with
+  | mkpair(a, b) => a
+
+def snd (A : Type) (B : Type) (p : Pair A B) : B := match p with
+  | mkpair(a, b) => b
