@@ -83,7 +83,7 @@ Match
     
 MatchArm
   = _? "|" _? pattern:Pattern _? "=>" _? body:Arrow
-  	{ return make_constructor("pattern", pattern, body); }
+  	{ return make_constructor("match.arm", pattern, body); } // TODO: this should be "match.arm"
 
 Pattern
   = name:Id "(" args:PatternArgs ")" { return make_constructor("pattern.constructor", name, make_list(args)); }

@@ -53,7 +53,7 @@ is_field(field(Name, Ty)) :- is_term(Ty)
 is_arm(match.arm(Pattern, Body)) :- is_pattern(Pattern) & is_term(Body)
 
 is_pattern(pattern.var(X))
-is_pattern(pattern.constr(X, Patterns)) :- all_patterns(Patterns)
+is_pattern(pattern.constructor(X, Patterns)) :- all_patterns(Patterns)
 is_pattern(pattern.wildcard)
 
 is_uni_param(universe.parameter(Name))
@@ -240,7 +240,7 @@ substitute_arms_with_context(X, Src, cons(match.arm(Pattern, Body), Rest), Bound
 substitute_arms_with_context(X, Src, cons(match.arm(Pattern, Body), Rest), Bound, cons(match.arm(Pattern, Sub_Body), Sub_Rest)) :- ~pattern_binds_var(Pattern, X) & substitute_with_context(X, Src, Body, Bound, Sub_Body) & substitute_arms_with_context(X, Src, Rest, Bound, Sub_Rest)
 
 pattern_binds_var(pattern.var(X), X)
-pattern_binds_var(pattern.constr(Name, Patterns), X) :- pattern_binds_var_any(Patterns, X)
+pattern_binds_var(pattern.constructor(Name, Patterns), X) :- pattern_binds_var_any(Patterns, X)
 
 pattern_binds_var_any(cons(Pattern, Rest), X) :- pattern_binds_var(Pattern, X)
 pattern_binds_var_any(cons(Pattern, Rest), X) :- pattern_binds_var_rec(Rest, X)
@@ -396,11 +396,11 @@ check_declaration(inductive(Name, nil, Params, Ty, Constrs), Ctx, New_Ctx) :- ct
 check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
 
 check_constrs(nil, Ctx, UV_Ctx, Uni_Params, Params, Ctx)
-check_constrs(cons(constr_decl(Name, Ty), Rest), Ctx, UV_Ctx, nil, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.add_constr(Ctx, New, Constr_Ty, Inter_Ctx) & check_constrs(Rest, Inter_Ctx, UV_Ctx, nil, Params, New_Ctx)
-check_constrs(cons(constr_decl(Name, Ty), Rest), Ctx, UV_Ctx, Uni_Params, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.add_def(Ctx, Name, Uni_Params, Constr_Ty, Inter_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, nil, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.extend_constr(Ctx, Name, Constr_Ty, Inter_Ctx) & check_constrs(Rest, Inter_Ctx, UV_Ctx, nil, Params, New_Ctx)
+check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, Uni_Params, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Constr_Ty, Inter_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
 
 %% Check structure
-check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx) %% TODO: finish
+check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
 
 check_fields(nil, Params, Param_Ctx, Ctx, Ctx)
 check_fields(cons(field(Name, Ty), Rest), Params, Param_Ctx, Ctx, New_Ctx) :- infer(Ty, Param_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_app(Name, Params, App) & make_pi_type(Params, pi("struct_param", App, Ty), Proj_Ty) & ctx.extend_axiom(Ctx, Name, Proj_Ty, Inter_Ctx) & check_fields(Rest, Params, Param_Ctx, Inter_Ctx, New_Ctx)
@@ -422,8 +422,6 @@ make_fresh_uni_param_subst(nil, Substitution, Substitution)
 make_fresh_uni_param_subst(cons(U, Rest), Substitution, New_Substitution) :- map.insert(Substitution, U, Fresh_U, Inter_Substitution) & make_fresh_uni_param_subst(Rest, Inter_Substitution, New_Substitution)
 
 infer_app(pi(X, Param_Ty, Body_Ty), Arg, Ctx, Type) :- infer(Arg, Ctx, Arg_Ty) & unify(Arg_Ty, Param_Ty) & substitute(X, Arg, Body_Ty, Type)
-%% TODO: unify
-
 
 %% TODO: do we have to "apply universe substitutions" here? see pi_rule
 infer_pi(uconst(0), U, Ctx, U)
@@ -438,7 +436,7 @@ infer_uni(U, uadd(U, 1)) :- ~is_uconst(U)
 infer(var(X), Ctx, Type) :- ctx.lookup_var(Ctx, X, Type)
 infer(var(X), Ctx, New_Ty) :- ~ctx.contains_var(Ctx, X) & ctx.lookup_def(Ctx, X, ctx.def(Uni_Params, Ty)) & fresh_uni_params(Ty, Uni_Params, New_Ty)
 infer(var(X), Ctx, Type) :- ~ctx.contains_var(Ctx, X) & ~ctx.contains_def(Ctx, X) & ctx.lookup_axiom(Ctx, X, Type)
-infer(var(X), Ctx, Type) :- ~ctx.contains_var(Ctx, X) & ~ctx.contains_def(Ctx, X) & ~ctx.contains_axiom(Ctx, X) & ctx.contains_constr(Ctx, X, Type)
+infer(var(X), Ctx, Type) :- ~ctx.contains_var(Ctx, X) & ~ctx.contains_def(Ctx, X) & ~ctx.contains_axiom(Ctx, X) & ctx.lookup_constr(Ctx, X, Type)
 
 
 %% Infer application type
@@ -468,24 +466,19 @@ infer_constr_args(cons(Arg, Rest), pi(Param, Param_Ty, Body_Ty), Ctx, R_Ty) :- i
 
 
 %% Infer match type
-%% TODO: parsing should guarantee arms are nonempty
-% match.arm(Pattern, Body)
 
 % Single arm case
 infer(match(Target, Arms), Ctx, Arms_Ty) :- infer(Target, Ctx, Target_Ty) & infer_arms(Arms, Target_Ty, Ctx, Arms_Ty)
 
 infer_arms([match.arm(Pattern, Body)], Target_Ty, Ctx, Arm_Ty) :- check_pattern(Pattern, Target_Ty, Ctx, Pattern_Ctx) & infer(Body, Pattern_Ctx, Arm_Ty)
-infer_arms(cons(match.arm(Pattern, Body), Rest), Target_Ty, Ctx, Arm_Ty) :- infer_arms([match.arm(Pattern, Body)], Target_Ty, Ctx, Arm_Ty) & infer_arms(Rest, Target_Ty, Ctx, Rest_Ty) & def_eq(Arm_Ty, Rest_Ty)
+infer_arms(cons(match.arm(Pattern, Body), Rest), Target_Ty, Ctx, Arm_Ty) :- infer_arms([match.arm(Pattern, Body)], Target_Ty, Ctx, Arm_Ty) & infer_arms(Rest, Target_Ty, Ctx, Rest_Ty) & def_eq(Arm_Ty, Rest_Ty, Ctx) %% TODO
 %% ^ TODO: do we need create_fresh_branch_context? or can we use Pattern_Ctx directly?
 
-check_pattern(pattern.var(X), Expected_Ty, Ctx, New_Ctx) :- ctx.lookup_constr(Ctx, X, Ty) & check_pattern(pattern.constr(X, nil), Ctx, Expected_Ty, New_Ctx)
+check_pattern(pattern.var(X), Expected_Ty, Ctx, New_Ctx) :- ctx.lookup_constr(Ctx, X, Ty) & check_pattern(pattern.constructor(X, nil), Ctx, Expected_Ty, New_Ctx)
 check_pattern(pattern.var(X), Expected_Ty, Ctx, New_Ctx) :- ~ctx.contains_constr(Ctx, X) & ctx.extend_var(Ctx, X, Expected_Ty, New_Ctx)
 check_pattern(pattern.wildcard, Expected_Ty, Ctx, Ctx)
-check_pattern(pattern.constr(Name, Patterns), Expected_Ty, Ctx, New_Ctx) :- ctx.lookup_constr(Ctx, Name, Ty) & spec_constr_ty(Ty, Expected_Ty, Spec_Ty) & get_constr_out(Spec_Ty, Out_Ty) & def_eq(Spec_Ty, Expected_Ty, Ctx) & get_constr_args(Spec_Ty, Pattern_Tys) & check_all_patterns(Patterns, Pattern_Tys, Ctx, New_Ctx)
-
-%% TODO: def_eq
-
-check_pattern(pattern.constr(Name, Patterns), Expected_Ty, Ctx, New_Ctx) :- ~ctx.contains_constr(Ctx, Name) & ctx.lookup_def(Ctx, Name, ctx.def(Uni_Params, Ty)) & fresh_uni_params(Ty, Uni_Params, New_Ty) & get_constr_out(New_Ty, Out_Ty) & unify(Out_Ty, Expected_Ty) & get_constr_args(Spec_Ty, Pattern_Tys) & check_all_patterns(Patterns, Pattern_Tys, Ctx, New_Ctx)
+check_pattern(pattern.constructor(Name, Patterns), Expected_Ty, Ctx, New_Ctx) :- ctx.lookup_constr(Ctx, Name, Ty) & spec_constr_ty(Ty, Expected_Ty, Spec_Ty) & get_constr_out(Spec_Ty, Out_Ty) & def_eq(Out_Ty, Expected_Ty, Ctx) & get_constr_args(Spec_Ty, Pattern_Tys) & check_all_patterns(Patterns, Pattern_Tys, Ctx, New_Ctx)
+check_pattern(pattern.constructor(Name, Patterns), Expected_Ty, Ctx, New_Ctx) :- ~ctx.contains_constr(Ctx, Name) & ctx.lookup_def(Ctx, Name, ctx.def(Uni_Params, Ty)) & fresh_uni_params(Ty, Uni_Params, New_Ty) & get_constr_out(New_Ty, Out_Ty) & unify(Out_Ty, Expected_Ty) & get_constr_args(New_Ty, Pattern_Tys) & check_all_patterns(Patterns, Pattern_Tys, Ctx, New_Ctx)
 
 
 check_all_patterns(nil, nil, Ctx, Ctx)
@@ -512,6 +505,40 @@ apply_spec(Ty, cons(Ty_Param, Rest_Param), cons(Ty_Arg, Rest_Arg), Spec_Ty) :- ~
 get_constr_out(pi(X, Ty, Body), Out_Ty) :- get_constr_out(Body, Out_Ty)
 get_constr_out(Constr_Ty, Constr_Ty) :- ~is_pi(Constr_Ty)
 
-get_constr_args(pi(X, usort(U), Body), cons(usort(U), Arg_Tys)) :- get_constr_args(Body, Arg_Tys)
-get_constr_args(pi(X, Ty, Body), Arg_Tys) :- ~is_usort(Ty) & get_constr_args(Body, Arg_Tys)
+% TODO: this is backwards, need to push types when they are NOT type params; see extract_constructor_args
+%% TODO: fixed the above, check that this now works
+get_constr_args(pi(X, usort(U), Body), Arg_Tys) :- get_constr_args(Body, Arg_Tys)
+get_constr_args(pi(X, Ty, Body), cons(Ty, Arg_Tys)) :- ~is_usort(Ty) & get_constr_args(Body, Arg_Tys)
 get_constr_args(Constr_Ty, nil) :- ~is_pi(Constr_Ty)
+
+%% TODO: allow parser to discard trailing whitespace before EoF
+
+%% TODO: investigate why the following typechecks:
+% inductive List (A : Type) : Type where
+%   | nil : List A
+%   | cons : A -> List A -> List B
+
+%check_declaration(
+%    def(
+%        "add_lower",
+%        [],
+%        [
+%            parameter("n_lower",var("nat_upper")),
+%            parameter("m_lower",var("nat_upper"))
+%        ],
+%        var("nat_upper"),
+%        match(
+%            var("n_lower"),
+%            [pattern(pattern.constructor("zero_lower",[]),var("m_lower")),pattern(pattern.constructor("succ_lower",[pattern.var("k_lower")]),app(var("succ_lower"),app(app(var("add_lower"),var("k_lower")),var("m_lower"))))])),
+%    ctx(
+%        [],
+%        [],
+%        [map.entry("zero_lower",var("nat_upper")),map.entry("succ_lower",pi(var(_),var("nat_upper"),var("nat_upper")))],
+%        [map.entry("nat_upper",usort(uconst(1)))],
+%        [],
+%        []), 
+%    New_Ctx)
+
+% check_declaration(def(Name, nil, Params, Ty, Body), Ctx, New_Ctx)
+
+% check_declaration(def("add_lower",[],[parameter("n_lower",var("nat_upper")),parameter("m_lower",var("nat_upper"))],var("nat_upper"),match(var("n_lower"),[match.arm(pattern.constructor("zero_lower",[]),var("m_lower")),match.arm(pattern.constructor("succ_lower",[pattern.var("k_lower")]),app(var("succ_lower"),app(app(var("add_lower"),var("k_lower")),var("m_lower"))))])),ctx([],[],[map.entry("zero_lower",var("nat_upper")),map.entry("succ_lower",pi(var(_),var("nat_upper"),var("nat_upper")))],[map.entry("nat_upper",usort(uconst(1)))],[],[]), New_Ctx)

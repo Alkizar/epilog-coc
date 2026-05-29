@@ -31,7 +31,8 @@ button.addEventListener('click', () => {
         var result = compfindx(read("yes"), read(`check_module([` + ast + `])`), lambda, library);
         alert(result);
     } catch (e) {
-        output.textContent = e.message;
+        //output.textContent = e.message;
+        alert(e.message);
     }
 });
 
