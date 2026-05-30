@@ -44,6 +44,7 @@ is_term(pi(X, Ty, Body)) :- is_term(Ty) & is_term(Body)
 is_term(usort(Uni)) :- is_universe(Uni)
 is_term(match(Target, Arms)) :- is_term(Target) & all_arms(Arms)
 is_term(constructor(Name, Args)) :- all_terms(Args)
+is_term(proj(Term, Field)) :- is_term(Term) & 
 %% TODO: projections, sigma, pair, fst, snd, (let?)
 
 is_var(var(X))
@@ -53,6 +54,7 @@ is_pi(pi(X, Ty, Body))
 is_usort(usort(Uni))
 is_match(match(Target, Arms))
 is_constructor(constructor(Name, Args))
+is_proj(proj(Term, Field))
 
 is_universe(uconst(N))
 is_universe(uvar(X))
@@ -140,6 +142,7 @@ universe.solve(usort(U), usort(V)) :- universe.unify(U, V)
 universe.solve(usort(U), usort(V)) :- universe.unify(V, U)
 universe.solve(match(Target1, Arms1), match(Target2, Arms2)) :- universe.solve(Target1, Target2) & universe.solve_arms(Arms1, Arms2)
 universe.solve(constructor(Name1, Args1), constructor(Name2, Args2)) :- universe.solve_args(Args1, Args2)
+universe.solve(proj(Term1, Field1), proj(Term2, Field2)) :- universe.solve(Term1, Term2)
 
 universe.solve_arms(nil, nil)
 universe.solve_arms(cons(match.arm(Pattern1, Body1), Rest1), cons(match.arm(Pattern2, Body2), Rest2)) :- universe.solve(Body1, Body2) & universe.solve_arms(Rest1, Rest2)
@@ -200,7 +203,8 @@ uni_subst_all(var(X), Substitution, var(X))
 uni_subst_all(app(Fun, Arg), Substitution, app(Sub_Fun, Sub_Arg)) :- uni_subst_all(Fun, Substitution, Sub_Fun) & uni_subst_all(Arg, Substitution, Sub_Arg)
 uni_subst_all(abs(X, Ty, Body), Substitution, abs(X, Sub_Ty, Sub_Body)) :- uni_subst_all(Ty, Substitution, Sub_Ty) & uni_subst_all(Body, Substitution, Sub_Body)
 uni_subst_all(pi(X, Ty, Body), Substitution, pi(X, Sub_Ty, Sub_Body)) :- uni_subst_all(Ty, Substitution, Sub_Ty) & uni_subst_all(Body, Substitution, Sub_Body)
-uni_subst_all(Term, Substitution, Term) :- ~is_usort(Term) & ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term)
+uni_subst_all(proj(Term, Field), Substitution, proj(Sub_Term, Field)) :- uni_subst_all(Term, Substitution, Sub_Field)
+uni_subst_all(Term, Substitution, Term) :- ~is_usort(Term) & ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_proj(Term)
 
 uni_subst(uvar(U), Substitution, New_U) :- map.lookup(Substitution, U, New_U)
 uni_subst(uvar(U), Substitution, uvar(U)) :- ~map.contains(Substitution, U)
@@ -222,6 +226,16 @@ occurs_free(X, abs(Y, Ty, Body)) :- occurs_free(X, Ty)
 occurs_free(X, abs(Y, Ty, Body)) :- distinct(X, Y) & occurs_free(X, Body)
 occurs_free(X, pi(Y, Ty, Body)) :- occurs_free(X, Ty)
 occurs_free(X, pi(Y, Ty, Body)) :- distinct(X, Y) & occurs_free(X, Body)
+occurs_free(X, match(Target, Arms)) :- occurs_free(X, Target)
+occurs_free(X, match(Target, Arms)) :- occurs_free_arms(X, Arms)
+occurs_free(X, constructor(Name, Args)) :- occurs_free_args(X, Args)
+occurs_free(X, proj(Term, Target)) :- occurs_free(X, Term)
+
+occurs_free_arms(X, cons(match.arm(Pattern, Body), Rest)) :- occurs_free(X, Body)
+occurs_free_arms(X, cons(match.arm(Pattern, Body), Rest)) :- occurs_free_arms(X, Rest)
+
+occurs_free_args(X, cons(Arg, Rest)) :- occurs_free(X, Arg)
+occurs_free_args(X, cons(Arg, Rest)) :- occurs_free_args(X, Rest)
 
 rename_var(Prev, New, var(Prev), var(New))
 rename_var(Prev, New, var(X), var(X)) :- distinct(Prev, X)
@@ -231,7 +245,8 @@ rename_var(Prev, New, abs(X, Ty, Body), abs(X, R_Ty, R_Body)) :- distinct(Prev, 
 rename_var(Prev, New, pi(Prev, Ty, Body), pi(Prev, R_Ty, Body)) :- rename_var(Prev, New, Fun, R_Fun)
 rename_var(Prev, New, pi(X, Ty, Body), pi(X, R_Ty, R_Body)) :- distinct(Prev, X) & rename_var(Prev, New, Ty, R_Ty) & rename_var(Prev, New, Body, R_Body)
 rename_var(Prev, New, match(Target, Arms), match(R_Target, R_Arms)) :- rename_var(Prev, New, Target, R_Target) & rename_var_arms(Prev, New, Arms, R_Arms)
-rename_var(Prev, New, Term, Term) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_match(Term)
+rename_var(Prev, New, proj(Term, Field), match(R_Term, Field)) :- rename_var(Prev, New, Term, R_Term)
+rename_var(Prev, New, Term, Term) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_match(Term) & ~is_proj(Term)
 
 rename_var_arms(Prev, New, nil, nil)
 rename_var_arms(Prev, New, cons(match.arm(Pattern, Body), Rest), cons(match.arm(Pattern, Body), R_Rest)) :- pattern_binds_var(Pattern, Prev) & rename_var_arms(Prev, New, Rest, R_Rest)
@@ -253,7 +268,9 @@ substitute_with_context(X, Src, pi(Y, Ty, Body), Bound, pi(Y, Sub_Ty, Sub_Body))
 
 substitute_with_context(X, Src, match(Target, Arms), Bound, match(Sub_Target, Sub_Arms)) :- substitute_with_context(X, Src, Target, Bound, Sub_Target) & substitute_arms_with_context(X, Src, Arms, Bound, Sub_Arms)
 
-substitute_with_context(X, Src, Tgt, Bound, Tgt) :- ~is_var(Tgt) & ~is_app(Tgt) & ~is_abs(Tgt) & ~is_pi(Tgt) & ~is_match(Tgt)
+substitute_with_context(X, Src, proj(Term, Field), Bound, proj(Sub_Term, Field)) :- substitute_with_context(X, Src, Term, Bound, Sub_Term)
+
+substitute_with_context(X, Src, Tgt, Bound, Tgt) :- ~is_var(Tgt) & ~is_app(Tgt) & ~is_abs(Tgt) & ~is_pi(Tgt) & ~is_match(Tgt) & ~is_proj(Tgt)
 
 substitute_arms_with_context(X, Src, nil, Bound, nil)
 substitute_arms_with_context(X, Src, cons(match.arm(Pattern, Body), Rest), Bound, cons(match.arm(Pattern, Body), Sub_Rest)) :- pattern_binds_var(Pattern, X) & substitute_arms_with_context(X, Src, Rest, Bound, Sub_Rest)
@@ -263,7 +280,7 @@ pattern_binds_var(pattern.var(X), X)
 pattern_binds_var(pattern.constructor(Name, Patterns), X) :- pattern_binds_var_any(Patterns, X)
 
 pattern_binds_var_any(cons(Pattern, Rest), X) :- pattern_binds_var(Pattern, X)
-pattern_binds_var_any(cons(Pattern, Rest), X) :- pattern_binds_var_rec(Rest, X)
+pattern_binds_var_any(cons(Pattern, Rest), X) :- pattern_binds_var_any(Rest, X)
 
 substitute(X, Src, Tgt, Result) :- substitute_with_context(X, Src, Tgt, nil, Result)
 
@@ -339,7 +356,16 @@ test(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg), Depth) :- iter_depth(Depth, 
 test(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & test(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & test(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
 test(pi(X, Ty, Body), Db_Ctx, N, pi(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & test(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & test(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
 test(usort(U), Db_Ctx, N, usort(U), Depth) %% TODO: delete this
-test(Term, Db_Ctx, N, Term, Depth) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term)
+test(proj(Term, Field), Db_Ctx, N, proj(Db_Term, Field), Depth) :- iter_depth(Depth, Succ_Depth) & test(Term, Db_Ctx, N, Db_Term, Succ_Depth)
+test(match(Target, Arms), Db_Ctx, N, match(Db_Target, Db_Arms), Depth) :- iter_depth(Depth, Succ_Depth) & test(Target, Db_Ctx, N, Db_Target, Succ_Depth) & alpha_normalize_arms(Arms, Db_Ctx, N, Db_Arms, Succ_Depth)
+test(constructor(Name, Args), Db_Ctx, N, constructor(Name, Db_Args), Depth) :- iter_depth(Depth, Succ_Depth) & alpha_normalize_args(Args, Db_Ctx, N, Db_Args, Succ_Depth)
+test(Term, Db_Ctx, N, Term, Depth) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term) & ~is_proj(Term)
+
+alpha_normalize_arms(nil, Db_Ctx, N, nil, Depth)
+alpha_normalize_arms(cons(match.arm(Pattern, Body), Rest), Db_Ctx, N, cons(match.arm(Db_Pattern, Db_Body), Db_Rest), Depth) :- test(Body, Db_Ctx, N, Db_Body, Depth) & alpha_normalize_arms(Rest, Db_Ctx, N, Db_Rest, Depth)
+
+alpha_normalize_args(nil, Db_Ctx, N, nil, Depth)
+alpha_normalize_args(cons(Arg, Rest), Db_Ctx, N, cons(Db_Arg, Db_Rest), Depth) :- test(Arg, Db_Ctx, N, Db_Arg, Depth) & alpha_normalize_args(Rest, Db_Ctx, N, Db_Rest, Depth)
 
 alpha_test(Term, Db_Term) :- test(Term, nil, 0, Db_Term, 0)
 
@@ -416,7 +442,7 @@ check_declaration(inductive(Name, nil, Params, Ty, Constrs), Ctx, New_Ctx) :- ct
 
 %% TODO: same here, no need for extend_unis
 %check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
-check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+check_declaration(inductive(Name, cons(Uni, Uni_Params), Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, cons(Uni, Uni_Params), Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, cons(Uni, Uni_Params), Params, New_Ctx)
 
 
 check_constrs(nil, Ctx, UV_Ctx, Uni_Params, Params, Ctx)
@@ -424,10 +450,22 @@ check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, nil, Params, New_C
 check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, Uni_Params, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Constr_Ty, Inter_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
 
 %% Check structure
-check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
+%% TODO: we are not handling universe parameters properly here!
+check_declaration(struct(Name, nil, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Name, Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
+check_declaration(struct(Name, cons(Uni, Uni_Params), Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Struct_Ty, Ext_Ctx) & check_fields(Name, Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
 
-check_fields(nil, Params, Param_Ctx, Ctx, Ctx)
-check_fields(cons(field(Name, Ty), Rest), Params, Param_Ctx, Ctx, New_Ctx) :- infer(Ty, Param_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_app(Name, Params, App) & make_pi_type(Params, pi("struct_param", App, Ty), Proj_Ty) & ctx.extend_axiom(Ctx, Name, Proj_Ty, Inter_Ctx) & check_fields(Rest, Params, Param_Ctx, Inter_Ctx, New_Ctx)
+check_fields(Struct_Name, nil, Params, Param_Ctx, Ctx, Ctx)
+check_fields(Struct_Name, cons(field(Name, Ty), Rest), Params, Param_Ctx, Ctx, New_Ctx) :- infer(Ty, Param_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_app(var(Struct_Name), Params, App) & make_pi_type(Params, pi("struct_param", App, Ty), Proj_Ty) & make_proj_name(Struct_Name, Name, Proj_Name) &  ctx.extend_axiom(Ctx, Proj_Name, Proj_Ty, Inter_Ctx) & check_fields(Struct_Name, Rest, Params, Param_Ctx, Inter_Ctx, New_Ctx)
+% ^^^ TODO: we are ending up with types that have the form pi(struct_param, field_name, ...) which is obviously a no go
+
+make_proj_name(Struct_Name, Field_Name, Proj_Name) :- evaluate(stringappend(Struct_Name, "."), Struct_Dot) & evaluate(stringappend(Struct_Dot, Field_Name), Proj_Name)
+
+%% TODO ^ see above, compare with below (bug somewhere)
+
+%check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
+%
+%check_fields(nil, Params, Param_Ctx, Ctx, Ctx)
+%check_fields(cons(field(Name, Ty), Rest), Params, Param_Ctx, Ctx, New_Ctx) :- infer(Ty, Param_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_app(Name, Params, App) & make_pi_type(Params, pi("struct_param", App, Ty), Proj_Ty) & ctx.extend_axiom(Ctx, Name, Proj_Ty, Inter_Ctx) & check_fields(Rest, Params, Param_Ctx, Inter_Ctx, New_Ctx)
 
 %% Check terms
 
@@ -542,27 +580,4 @@ get_constr_args(Constr_Ty, nil) :- ~is_pi(Constr_Ty)
 %   | nil : List A
 %   | cons : A -> List A -> List B
 
-%check_declaration(
-%    def(
-%        "add_lower",
-%        [],
-%        [
-%            parameter("n_lower",var("nat_upper")),
-%            parameter("m_lower",var("nat_upper"))
-%        ],
-%        var("nat_upper"),
-%        match(
-%            var("n_lower"),
-%            [pattern(pattern.constructor("zero_lower",[]),var("m_lower")),pattern(pattern.constructor("succ_lower",[pattern.var("k_lower")]),app(var("succ_lower"),app(app(var("add_lower"),var("k_lower")),var("m_lower"))))])),
-%    ctx(
-%        [],
-%        [],
-%        [map.entry("zero_lower",var("nat_upper")),map.entry("succ_lower",pi(var(_),var("nat_upper"),var("nat_upper")))],
-%        [map.entry("nat_upper",usort(uconst(1)))],
-%        [],
-%        []), 
-%    New_Ctx)
-
-% check_declaration(def(Name, nil, Params, Ty, Body), Ctx, New_Ctx)
-
-% check_declaration(def("add_lower",[],[parameter("n_lower",var("nat_upper")),parameter("m_lower",var("nat_upper"))],var("nat_upper"),match(var("n_lower"),[match.arm(pattern.constructor("zero_lower",[]),var("m_lower")),match.arm(pattern.constructor("succ_lower",[pattern.var("k_lower")]),app(var("succ_lower"),app(app(var("add_lower"),var("k_lower")),var("m_lower"))))])),ctx([],[],[map.entry("zero_lower",var("nat_upper")),map.entry("succ_lower",pi(var(_),var("nat_upper"),var("nat_upper")))],[map.entry("nat_upper",usort(uconst(1)))],[],[]), New_Ctx)
+infer(proj(Term, Field), Ctx, Cod_Ty) :- infer(Term, Ctx, var(Struct_Name)) & make_proj_name(Struct_Name, Field, Proj_Name) & ctx.lookup_axiom(Ctx, Proj_Name, pi(X, Dom_Ty, Cod_Ty)) & def_eq(Dom_Ty, var(Struct_Name), Ctx)

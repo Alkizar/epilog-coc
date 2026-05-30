@@ -37,7 +37,7 @@ let yy_meta_counter = 0;
 }}
 
 Module
-  = head:Declaration tail:("\n"+ Declaration)* { return [head, ...tail.map(x => x[1])]; }
+  = head:Declaration tail:("\n"+ Declaration)* _? { return [head, ...tail.map(x => x[1])]; }
 
 Declaration
   = "axiom" _ name:Id uni_params:UniParams? _? ":" _? type:Term 
@@ -69,12 +69,21 @@ Field
   = _? "(" _? name:Id _? ":" _? type:Term ")" { return make_constructor("field", name, type); }
 
 Term
-  = Let
+  = Proj
+  / Match
+  
+Proj
+  = head:Match tail:("." Id)+ {
+    	return tail.reduce(
+        	(proj, field) => make_constructor("proj", proj, field[1]),
+          head
+        );
+    }
 
-Let
+/*Let
   = Match
   / "let" _ x:Id _? ":" _? type:Arrow _? ":=" _? val:Arrow _ "in" _ body:Let
-  	{ return make_constructor("let", x, type, val, body); }
+  	{ return make_constructor("let", x, type, val, body); }*/
 
 Match
   = Arrow
@@ -133,6 +142,7 @@ App
 Atom
   = x:Id { return make_constructor("var", x); }
   / "Sort" " "+ level:UniverseExpr { return make_sort(level); } // TODO -- do we want parens or something?
+  / "Type" { return make_sort(make_uni_const(1)); }
   / "Type" " "+ n:Natural?
   	{
     	if (n === null) {
@@ -140,7 +150,6 @@ Atom
         }
         return make_sort(make_uni_const(n + 1));
     }
-  / "Type" { return make_sort(make_uni_const(1)); }
   / "Prop" { return make_sort(make_uni_const(0)); }
   / "(" term:Term ")" { return term; }
 
