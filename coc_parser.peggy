@@ -37,17 +37,17 @@ let yy_meta_counter = 0;
 }}
 
 Module
-  = head:Declaration tail:("\n"+ Declaration)* _? { return [head, ...tail.map(x => x[1])]; }
+  = head:Declaration tail:("\n"+ Declaration)* _? { return { ast: [head.declaration, ...tail.map(x => x[1].declaration)], locations: [head.location, ...tail.map(x => x[1].location)] }; }
 
 Declaration
   = "axiom" _ name:Id uni_params:UniParams? _? ":" _? type:Term 
-  	{ return make_constructor('axiom', name, make_list(uni_params), type); }
+  	{ return { declaration: make_constructor('axiom', name, make_list(uni_params), type), location: location() }; }
   / "def" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _? ":=" _? body:Term 
-  	{ return make_constructor('def', name, make_list(uni_params), make_list(params), type, body); }
+  	{ return { declaration: make_constructor('def', name, make_list(uni_params), make_list(params), type, body), location: location() }; }
   / "inductive" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ constructors:Constructor+
-  	{ return make_constructor("inductive", name, make_list(uni_params), make_list(params), type, make_list(constructors)); }
+  	{ return { declaration: make_constructor("inductive", name, make_list(uni_params), make_list(params), type, make_list(constructors)), location: location() }; }
   / "struct" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ fields:Field+
-  	{ return make_constructor("struct", name, make_list(uni_params), make_list(params), type, make_list(fields)); }
+  	{ return { declaration: make_constructor("struct", name, make_list(uni_params), make_list(params), type, make_list(fields)), location: location() }; }
 
 UniParams
   = ".{" head:Id _? tail:TailParams* "}" { return [head].concat(tail); }
@@ -123,7 +123,7 @@ Arrow
     	//let fresh_meta = "M_" + yy_meta_counter
     	//yy_meta_counter += 1
     	//return make_constructor("pi", fresh_meta, domain, codomain); 
-      return make_constructor("pi", make_constructor("var", "_"), domain, codomain); // TODO
+      return make_constructor("pi", make_constructor("var", '"_"'), domain, codomain); // TODO
     }
   / "(" _? x:Id _? ":" _? type:Term ")" _? "->" _? body:Arrow
   	{ return make_constructor("pi", x, type, body); }
@@ -151,6 +151,8 @@ Atom
         return make_sort(make_uni_const(n + 1));
     }
   / "Prop" { return make_sort(make_uni_const(0)); }
+  / "λ" _? "(" _? x:Id _? ":" _? type:Term ")" _? "." _? body:Term { return make_constructor("abs", x, type, body); }
+  / "Π" _? "(" _? x:Id _? ":" _? type:Term ")" _? "." _? body:Term { return make_constructor("pi", x, type, body); }
   / "(" term:Term ")" { return term; }
 
 UniverseExpr

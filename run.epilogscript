@@ -1,4 +1,4 @@
 dataset: coc_data.hdf
 ruleset: coc_rules.hrf
-query: ctx.nil(Ctx) & check_declaration(declaration.def("id",["u"],[parameter("a",usort(uadd(uvar("u"),1))),parameter("x",var("a"))],var("a"),var("x")), Ctx, New_Ctx)
-dotrace: false
+query: check_declaration(axiom("pair_lower",[],app(app(var("pair_upper"),usort(uconst(1))),usort(uconst(1)))), ctx([],[],[],[map.entry("pair_upper.fst_lower",pi("a_upper",usort(uadd(uvar("u_lower"),1)),pi("b_upper",usort(uadd(uvar("u_lower"),1)),pi("struct_param",app(app(var("pair_upper"),var("a_upper")),var("b_upper")),var("a_upper"))))),map.entry("pair_upper.snd_lower",pi("a_upper",usort(uadd(uvar("u_lower"),1)),pi("b_upper",usort(uadd(uvar("u_lower"),1)),pi("struct_param",app(app(var("pair_upper"),var("a_upper")),var("b_upper")),var("b_upper")))))],[map.entry("pair_upper",ctx.def(["u_lower"],pi("a_upper",usort(uadd(uvar("u_lower"),1)),pi("b_upper",usort(uadd(uvar("u_lower"),1)),usort(uadd(uvar("u_lower"),1))))))],[]), New_Ctx)
+dotrace: true

@@ -129,7 +129,8 @@ universe.normalize(U, U) :- is_universe(U) & ~is_uadd(U) & ~is_umax(U)
 %% TODO: are the universes assumed to be normalized already?
 universe.unify(uconst(N), uconst(N))
 universe.unify(uvar(X), uvar(X))
-universe.unify(uadd(U, N), uconst(M)) :- evaluate(minus(N, M), R) & leq(0, R) & universe.unify(U, uconst(R))
+universe.unify(uadd(U, N), uconst(M)) :- evaluate(minus(M, N), R) & leq(0, R) & universe.unify(U, uconst(R))
+universe.unify(uconst(M), uadd(U, N)) :- evaluate(minus(M, N), R) & leq(0, R) & universe.unify(U, uconst(R))
 universe.unify(uadd(U, N), uadd(V, N)) :- universe.unify(U, V)
 universe.unify(umax(U1, V1), umax(U2, V2)) :- universe.unify(U1, U2) & universe.unify(V1, V2)
 

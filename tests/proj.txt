@@ -16,4 +16,4 @@ struct Testpair : Type where
 
 axiom test : Testpair
 
-def test_fst : Test := test.fst // TODO: this is also no good
+def test_fst : Test := test.fst

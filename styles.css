@@ -112,3 +112,39 @@ button:active {
 
     color: #444;
 }
+
+.editor {
+    display: flex;
+    align-items: stretch;
+    
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#gutter {
+    width: 32px;
+    background: #f5f5f5;
+    border-right: 1px solid #ddd;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+#input {
+    flex: 1;
+    border: none;
+    margin: 0;
+    padding: 20px;
+    resize: none;
+    font: inherit;
+    line-height: 1.6;
+}
+
+#gutter {
+    position: relative;
+}
+
+.gutter-line {
+    height: 1.6em;
+    text-align: center;
+}
