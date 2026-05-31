@@ -1,19 +1,14 @@
-struct Pair.{u} (A : Sort (u+1)) (B : Sort (u+1)) : Sort (u+1) where
-  (fst : A)
-  (snd : B)
+axiom Left : Type
+axiom Right : Type
 
-axiom pair : Pair Type Type // TODO: there is a problem with the universe solver for structs; we never replace universe vars with fresh metavars!
+struct Pair : Type where
+  (fst : Left)
+  (snd : Right)
 
-def test_proj_fst : Type := pair.fst
-def test_proj_snd : Type := pair.snd
+axiom pair_elt : Pair
 
+def test_proj_fst : Left := pair_elt.fst
+def test_proj_snd : Right := pair_elt.snd
 
-axiom Test : Type
-
-struct Testpair : Type where
-  (fst : Test)
-  (snd : Test)
-
-axiom test : Testpair
-
-def test_fst : Test := test.fst
+def fst_map (x : Pair) : Left := x.fst
+def snd_map (x : Pair) : Right := x.snd

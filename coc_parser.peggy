@@ -33,11 +33,10 @@ function make_ground_id(id) {
   return id.toLowerCase() + suffix;
 }
 
-let yy_meta_counter = 0;
 }}
 
 Module
-  = head:Declaration tail:("\n"+ Declaration)* _? { return { ast: [head.declaration, ...tail.map(x => x[1].declaration)], locations: [head.location, ...tail.map(x => x[1].location)] }; }
+  = _? head:Declaration tail:("\n"+ Declaration)* _? { return { ast: [head.declaration, ...tail.map(x => x[1].declaration)], locations: [head.location, ...tail.map(x => x[1].location)] }; }
 
 Declaration
   = "axiom" _ name:Id uni_params:UniParams? _? ":" _? type:Term 
@@ -46,8 +45,10 @@ Declaration
   	{ return { declaration: make_constructor('def', name, make_list(uni_params), make_list(params), type, body), location: location() }; }
   / "inductive" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ constructors:Constructor+
   	{ return { declaration: make_constructor("inductive", name, make_list(uni_params), make_list(params), type, make_list(constructors)), location: location() }; }
-  / "struct" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ fields:Field+
-  	{ return { declaration: make_constructor("struct", name, make_list(uni_params), make_list(params), type, make_list(fields)), location: location() }; }
+  /*/ "struct" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ fields:Field+
+  	{ return { declaration: make_constructor("struct", name, make_list(uni_params), make_list(params), type, make_list(fields)), location: location() }; }*/
+  / "struct" _ name:Id _? ":" _? type:Term _ "where" _ fields:Field+
+  	{ return { declaration: make_constructor("struct", name, make_list([]), make_list([]), type, make_list(fields)), location: location() }; } // TODO: parameters for structs are proving difficult to typecheck. Disable for now.
 
 UniParams
   = ".{" head:Id _? tail:TailParams* "}" { return [head].concat(tail); }
@@ -80,11 +81,6 @@ Proj
         );
     }
 
-/*Let
-  = Match
-  / "let" _ x:Id _? ":" _? type:Arrow _? ":=" _? val:Arrow _ "in" _ body:Let
-  	{ return make_constructor("let", x, type, val, body); }*/
-
 Match
   = Arrow
   / "match" _ term:Atom _ "with" _ arms:MatchArm+
@@ -92,7 +88,7 @@ Match
     
 MatchArm
   = _? "|" _? pattern:Pattern _? "=>" _? body:Arrow
-  	{ return make_constructor("match.arm", pattern, body); } // TODO: this should be "match.arm"
+  	{ return make_constructor("match.arm", pattern, body); }
 
 Pattern
   = name:Id "(" args:PatternArgs ")" { return make_constructor("pattern.constructor", name, make_list(args)); }
@@ -116,14 +112,10 @@ PatternArg
   = x:Id { return make_constructor("pattern.var", x); }
   / "_" { return make_constructor("pattern.wildcard"); }
 
-// TODO: _ param should become a fresh metavariable
 Arrow
   = domain:App _? "->" _? codomain:Arrow
   	{ 
-    	//let fresh_meta = "M_" + yy_meta_counter
-    	//yy_meta_counter += 1
-    	//return make_constructor("pi", fresh_meta, domain, codomain); 
-      return make_constructor("pi", make_constructor("var", '"_"'), domain, codomain); // TODO
+      return make_constructor("pi", make_constructor("var", '"_"'), domain, codomain);
     }
   / "(" _? x:Id _? ":" _? type:Term ")" _? "->" _? body:Arrow
   	{ return make_constructor("pi", x, type, body); }
@@ -142,14 +134,14 @@ App
 Atom
   = x:Id { return make_constructor("var", x); }
   / "Sort" " "+ level:UniverseExpr { return make_sort(level); } // TODO -- do we want parens or something?
-  / "Type" { return make_sort(make_uni_const(1)); }
-  / "Type" " "+ n:Natural?
+  / "Type " _? n:Natural?
   	{
     	if (n === null) {
         	return make_sort(make_uni_const(1));
         }
         return make_sort(make_uni_const(n + 1));
     }
+  / "Type" { return make_sort(make_uni_const(1)); }
   / "Prop" { return make_sort(make_uni_const(0)); }
   / "λ" _? "(" _? x:Id _? ":" _? type:Term ")" _? "." _? body:Term { return make_constructor("abs", x, type, body); }
   / "Π" _? "(" _? x:Id _? ":" _? type:Term ")" _? "." _? body:Term { return make_constructor("pi", x, type, body); }

@@ -116,6 +116,7 @@ button:active {
 .editor {
     display: flex;
     align-items: stretch;
+    height: 500px;
     
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -128,6 +129,7 @@ button:active {
     border-right: 1px solid #ddd;
     overflow: hidden;
     flex-shrink: 0;
+    position: relative;
 }
 
 #input {
@@ -138,13 +140,36 @@ button:active {
     resize: none;
     font: inherit;
     line-height: 1.6;
-}
-
-#gutter {
-    position: relative;
+    height: 100%;
+    resize: none;
 }
 
 .gutter-line {
     height: 1.6em;
     text-align: center;
+}
+
+.gutter-success {
+    height: 1.6em;
+    color: #27acf8;
+    text-align: center;
+}
+
+.gutter-failure {
+    height: 1.6em;
+    color: #c62828;
+    text-align: center;
+}
+
+#status {
+    font-size: 14px;
+    white-space: pre-wrap;
+}
+
+#status.success {
+    color: #2e7d32;
+}
+
+#status.error {
+    color: #c62828;
 }

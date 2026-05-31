@@ -33,6 +33,7 @@ append_elt(cons(X, Xs), Y, cons(X, Zs)) :- append_elt(Xs, Y, Zs)
 rev(nil, nil)
 rev(cons(X, Xs), Ws) :-  rev(Xs, Zs) & append_elt(Zs, X, Ws)
 
+
 %%%%%%%%%%%%%%
 %%% Structure
 %%%%%%%%%%%%%%
@@ -44,8 +45,7 @@ is_term(pi(X, Ty, Body)) :- is_term(Ty) & is_term(Body)
 is_term(usort(Uni)) :- is_universe(Uni)
 is_term(match(Target, Arms)) :- is_term(Target) & all_arms(Arms)
 is_term(constructor(Name, Args)) :- all_terms(Args)
-is_term(proj(Term, Field)) :- is_term(Term) & 
-%% TODO: projections, sigma, pair, fst, snd, (let?)
+is_term(proj(Term, Field)) :- is_term(Term)
 
 is_var(var(X))
 is_app(app(Fun, Arg))
@@ -122,11 +122,8 @@ universe.normalize(uadd(U, N), uadd(U, N)) :- is_universe(U) & ~is_uconst(U)
 universe.normalize(umax(U, V), uconst(R)) :- universe.normalize(U, uconst(N)) & universe.normalize(V, uconst(M)) & evaluate(max(N, M), R)
 universe.normalize(umax(U, V), umax(U, V)) :- universe.normalize(U, Nf_U) & universe.normalize(V, Nf_V) & ~is_uconst(Nf_U)
 universe.normalize(umax(U, V), umax(U, V)) :- universe.normalize(U, Nf_U) & universe.normalize(V, Nf_V) & ~is_uconst(Nf_V)
-
-
 universe.normalize(U, U) :- is_universe(U) & ~is_uadd(U) & ~is_umax(U)
 
-%% TODO: are the universes assumed to be normalized already?
 universe.unify(uconst(N), uconst(N))
 universe.unify(uvar(X), uvar(X))
 universe.unify(uadd(U, N), uconst(M)) :- evaluate(minus(M, N), R) & leq(0, R) & universe.unify(U, uconst(R))
@@ -134,7 +131,7 @@ universe.unify(uconst(M), uadd(U, N)) :- evaluate(minus(M, N), R) & leq(0, R) & 
 universe.unify(uadd(U, N), uadd(V, N)) :- universe.unify(U, V)
 universe.unify(umax(U1, V1), umax(U2, V2)) :- universe.unify(U1, U2) & universe.unify(V1, V2)
 
-%% TODO: are the terms assumed to be in DB form already? I think yes
+%% Terms should be in de Bruijn form before solving for universes.
 universe.solve(var(X), var(X))
 universe.solve(app(Fun1, Arg1), app(Fun2, Arg2)) :- universe.solve(Fun1, Fun2) & universe.solve(Arg1, Arg2)
 universe.solve(abs(X, Ty1, Body1), abs(X, Ty2, Body2)) :- universe.solve(Ty1, Ty2) & universe.solve(Body1, Body2)
@@ -213,7 +210,6 @@ uni_subst(uconst(N), Substitution, uconst(N))
 uni_subst(uadd(U, N), Substitution, uadd(New_U, N)) :- uni_subst(U, Substitution, New_U)
 uni_subst(umax(U, V), Substitution, umax(New_U, New_V)) :- uni_subst(U, Substitution, New_U) & uni_subst(V, Substitution, New_V)
 
-%%%%
 is_bound(cons(X, Xs), X)
 is_bound(cons(Y, Ys), X) :- distinct(Y, X) & is_bound(Ys, X)
 
@@ -290,23 +286,18 @@ substitute(X, Src, Tgt, Result) :- substitute_with_context(X, Src, Tgt, nil, Res
 %%% Equivalence
 %%%%%%%%%%%%%%
 
-%% Convert variable names to debruijn indices
-
-%alpha_normalize_rec(var(X), Db_Ctx, N, var(M)) :- map.lookup(Db_Ctx, X, M)
-%alpha_normalize_rec(var(X), Db_Ctx, N, var(X)) :- ~map.contains(Db_Ctx, X)    % Free variable
-%alpha_normalize_rec(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg)) :- alpha_normalize_rec(Fun, Db_Ctx, N, Db_Fun) & alpha_normalize_rec(Arg, Db_Ctx, N, Db_Arg)
-%alpha_normalize_rec(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body)) :- alpha_normalize_rec(Ty, Db_Ctx, N, Db_Ty) & 
+%% Convert variable names to de Bruijn indices
 
 alpha_normalize_rec(var(X), Db_Ctx, N, var(M)) :- map.lookup(Db_Ctx, X, M)
-alpha_normalize_rec(var(X), Db_Ctx, N, var(X)) :- ~map.contains(Db_Ctx, X)    % Free variable
+alpha_normalize_rec(var(X), Db_Ctx, N, var(X)) :- ~map.contains(Db_Ctx, X)
 alpha_normalize_rec(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg)) :- alpha_normalize_rec(Fun, Db_Ctx, N, Db_Fun) & alpha_normalize_rec(Arg, Db_Ctx, N, Db_Arg)
 alpha_normalize_rec(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body)) :- evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & alpha_normalize_rec(Ty, Ext_Db_Ctx, M, Db_Ty) & alpha_normalize_rec(Body, Ext_Db_Ctx, M, Db_Body)
 alpha_normalize_rec(pi(X, Ty, Body), Db_Ctx, N, pi(M, Db_Ty, Db_Body)) :- evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & alpha_normalize_rec(Ty, Ext_Db_Ctx, M, Db_Ty) & alpha_normalize_rec(Body, Ext_Db_Ctx, M, Db_Body)
-% alpha_normalize_rec(usort(U), Db_Ctx, N, usort(Db_U)) :- alpha_normalize_uni(U, Db_Ctx, N, Db_U) %% TODO
-alpha_normalize_rec(usort(U), Db_Ctx, N, usort(U)) %% TODO: delete this
-% alpha_normalize_rec(match()) %% TODO
-% alpha_normalize_rec(constructor()) %% TODO
-alpha_normalize_rec(Term, Db_Ctx, N, Term) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term)
+alpha_normalize_rec(usort(U), Db_Ctx, N, usort(U))
+alpha_normalize_rec(proj(Term, Field), Db_Ctx, N, proj(Db_Term, Field)) :- alpha_normalize_rec(Term, Db_Ctx, N, Db_Term)
+alpha_normalize_rec(match(Target, Arms), Db_Ctx, N, match(Db_Target, Db_Arms)) :- alpha_normalize_rec(Target, Db_Ctx, N, Db_Target) & alpha_normalize_arms(Arms, Db_Ctx, N, Db_Arms)
+alpha_normalize_rec(constructor(Name, Args), Db_Ctx, N, constructor(Name, Db_Args)) :- alpha_normalize_args(Args, Db_Ctx, N, Db_Args)
+alpha_normalize_rec(Term, Db_Ctx, N, Term) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term) & ~is_proj(Term)
 
 %% TODO: check that this behaves correctly for universes!
 %% TODO: finish this
@@ -351,24 +342,24 @@ max_depth(4)
 
 iter_depth(Depth, Succ_Depth) :- evaluate(plus(Depth, 1), Succ_Depth) & max_depth(Max) & leq(Succ_Depth, Max)
 
-test(var(X), Db_Ctx, N, var(M), Depth) :- map.lookup(Db_Ctx, X, M)
-test(var(X), Db_Ctx, N, var(X), Depth) :- ~map.contains(Db_Ctx, X)    % Free variable
-test(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg), Depth) :- iter_depth(Depth, Succ_Depth) & test(Fun, Db_Ctx, N, Db_Fun, Succ_Depth) & test(Arg, Db_Ctx, N, Db_Arg, Succ_Depth)
-test(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & test(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & test(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
-test(pi(X, Ty, Body), Db_Ctx, N, pi(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & test(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & test(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
-test(usort(U), Db_Ctx, N, usort(U), Depth) %% TODO: delete this
-test(proj(Term, Field), Db_Ctx, N, proj(Db_Term, Field), Depth) :- iter_depth(Depth, Succ_Depth) & test(Term, Db_Ctx, N, Db_Term, Succ_Depth)
-test(match(Target, Arms), Db_Ctx, N, match(Db_Target, Db_Arms), Depth) :- iter_depth(Depth, Succ_Depth) & test(Target, Db_Ctx, N, Db_Target, Succ_Depth) & alpha_normalize_arms(Arms, Db_Ctx, N, Db_Arms, Succ_Depth)
-test(constructor(Name, Args), Db_Ctx, N, constructor(Name, Db_Args), Depth) :- iter_depth(Depth, Succ_Depth) & alpha_normalize_args(Args, Db_Ctx, N, Db_Args, Succ_Depth)
-test(Term, Db_Ctx, N, Term, Depth) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term) & ~is_proj(Term)
+alpha_bounded_normalize_rec(var(X), Db_Ctx, N, var(M), Depth) :- map.lookup(Db_Ctx, X, M)
+alpha_bounded_normalize_rec(var(X), Db_Ctx, N, var(X), Depth) :- ~map.contains(Db_Ctx, X) 
+alpha_bounded_normalize_rec(app(Fun, Arg), Db_Ctx, N, app(Db_Fun, Db_Arg), Depth) :- iter_depth(Depth, Succ_Depth) & alpha_bounded_normalize_rec(Fun, Db_Ctx, N, Db_Fun, Succ_Depth) & alpha_bounded_normalize_rec(Arg, Db_Ctx, N, Db_Arg, Succ_Depth)
+alpha_bounded_normalize_rec(abs(X, Ty, Body), Db_Ctx, N, abs(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & alpha_bounded_normalize_rec(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & alpha_bounded_normalize_rec(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
+alpha_bounded_normalize_rec(pi(X, Ty, Body), Db_Ctx, N, pi(M, Db_Ty, Db_Body), Depth) :- iter_depth(Depth, Succ_Depth) & evaluate(plus(N, 1), M) & map.insert(Db_Ctx, X, M, Ext_Db_Ctx) & alpha_bounded_normalize_rec(Ty, Ext_Db_Ctx, M, Db_Ty, Succ_Depth) & alpha_bounded_normalize_rec(Body, Ext_Db_Ctx, M, Db_Body, Succ_Depth)
+alpha_bounded_normalize_rec(usort(U), Db_Ctx, N, usort(U), Depth)
+alpha_bounded_normalize_rec(proj(Term, Field), Db_Ctx, N, proj(Db_Term, Field), Depth) :- iter_depth(Depth, Succ_Depth) & alpha_bounded_normalize_rec(Term, Db_Ctx, N, Db_Term, Succ_Depth)
+alpha_bounded_normalize_rec(match(Target, Arms), Db_Ctx, N, match(Db_Target, Db_Arms), Depth) :- iter_depth(Depth, Succ_Depth) & alpha_bounded_normalize_rec(Target, Db_Ctx, N, Db_Target, Succ_Depth) & alpha_bounded_normalize_arms(Arms, Db_Ctx, N, Db_Arms, Succ_Depth)
+alpha_bounded_normalize_rec(constructor(Name, Args), Db_Ctx, N, constructor(Name, Db_Args), Depth) :- iter_depth(Depth, Succ_Depth) & alpha_bounded_normalize_args(Args, Db_Ctx, N, Db_Args, Succ_Depth)
+alpha_bounded_normalize_rec(Term, Db_Ctx, N, Term, Depth) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term) & ~is_proj(Term)
 
-alpha_normalize_arms(nil, Db_Ctx, N, nil, Depth)
-alpha_normalize_arms(cons(match.arm(Pattern, Body), Rest), Db_Ctx, N, cons(match.arm(Db_Pattern, Db_Body), Db_Rest), Depth) :- test(Body, Db_Ctx, N, Db_Body, Depth) & alpha_normalize_arms(Rest, Db_Ctx, N, Db_Rest, Depth)
+alpha_bounded_normalize_arms(nil, Db_Ctx, N, nil, Depth)
+alpha_bounded_normalize_arms(cons(match.arm(Pattern, Body), Rest), Db_Ctx, N, cons(match.arm(Db_Pattern, Db_Body), Db_Rest), Depth) :- alpha_bounded_normalize_rec(Body, Db_Ctx, N, Db_Body, Depth) & alpha_bounded_normalize_arms(Rest, Db_Ctx, N, Db_Rest, Depth)
 
-alpha_normalize_args(nil, Db_Ctx, N, nil, Depth)
-alpha_normalize_args(cons(Arg, Rest), Db_Ctx, N, cons(Db_Arg, Db_Rest), Depth) :- test(Arg, Db_Ctx, N, Db_Arg, Depth) & alpha_normalize_args(Rest, Db_Ctx, N, Db_Rest, Depth)
+alpha_bounded_normalize_args(nil, Db_Ctx, N, nil, Depth)
+alpha_bounded_normalize_args(cons(Arg, Rest), Db_Ctx, N, cons(Db_Arg, Db_Rest), Depth) :- alpha_bounded_normalize_rec(Arg, Db_Ctx, N, Db_Arg, Depth) & alpha_bounded_normalize_args(Rest, Db_Ctx, N, Db_Rest, Depth)
 
-alpha_test(Term, Db_Term) :- test(Term, nil, 0, Db_Term, 0)
+alpha_bounded_normalize(Term, Db_Term) :- alpha_bounded_normalize_rec(Term, nil, 0, Db_Term, 0)
 
 % TODO this appears to work! test -> alpha_normalize_rec, alpha_test -> alpha_normalize
 
@@ -387,8 +378,8 @@ alpha_test(Term, Db_Term) :- test(Term, nil, 0, Db_Term, 0)
 % unify(Term1, Term2) :- is_usort(Term1) & is_usort(Term2) & alpha_equiv(Term1, Term2)
 % unify(Term1, Term2) :- is_term(Term1) & is_term(Term2) & alpha_equiv(Term1, Term2)
 
-unify(Term1, Term2) :- alpha_test(Term1, Db_Term1) & alpha_test(Term2, Db_Term2) & universe.solve(Db_Term1, Db_Term2)
-unify(Term1, Term2) :- alpha_test(Term2, Db_Term2) & alpha_test(Term1, Db_Term1) & universe.solve(Db_Term2, Db_Term1)
+unify(Term1, Term2) :- alpha_bounded_normalize(Term1, Db_Term1) & alpha_bounded_normalize(Term2, Db_Term2) & universe.solve(Db_Term1, Db_Term2)
+unify(Term1, Term2) :- alpha_bounded_normalize(Term2, Db_Term2) & alpha_bounded_normalize(Term1, Db_Term1) & universe.solve(Db_Term2, Db_Term1)
 
 %% TODO ^
 
@@ -437,6 +428,8 @@ check_declaration(def(Name, nil, Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_
 check_declaration(def(Name, cons(Uni, Uni_Params), Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & infer(Ty, Uni_Var_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_pi_type(Params, Ty, Def_Ty) & ctx.extend_axiom(Uni_Var_Ctx, Name, Def_Ty, Rec_Ctx) & make_abs(Params, Body, Lambda) & check(Lambda, Def_Ty, Rec_Ctx) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Def_Ty, New_Ctx)
 %% TODO: ctx.extend_unis
 
+% def("t_lower",["u_lower"],[],usort(uvar("u_lower")),usort(uconst(1)))
+
 %% Check inductive
 check_declaration(inductive(Name, nil, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_axiom(Ctx, Name, Ind_Ty, Ext_Ctx) & ctx.extend_axiom(Uni_Var_Ctx, Name, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, nil, Params, New_Ctx)
 
@@ -471,7 +464,36 @@ make_proj_name(Struct_Name, Field_Name, Proj_Name) :- evaluate(stringappend(Stru
 %% Check terms
 
 check(abs(X, Ty, Body), pi(Y, Expected_Ty, Expected_Body), Ctx) :- def_eq(Ty, Expected_Ty, Ctx) & ctx.extend_var(Ctx, X, Ty, Ext_Ctx) & substitute(Y, var(X), Expected_Body, R_Expected_Body) & check(Body, R_Expected_Body, Ext_Ctx)
-check(Term, Expected_Ty, Ctx) :- ~is_abs(Term) & infer(Term, Ctx, Inferred_Ty) & def_eq(Inferred_Ty, Expected_Ty, Ctx)
+check(Term, Expected_Ty, Ctx) :- ~is_abs(Term) & infer(Term, Ctx, Inferred_Ty) & freshen_term(Inferred_Ty, Inferred_Fresh) & freshen_term(Expected_Ty, Expected_Fresh) & def_eq(Inferred_Fresh, Expected_Fresh, Ctx)
+
+%% TODO: check that this doesn't cause new problems
+in(X, cons(X, Ys))
+in(X, cons(Y, Ys)) :- distinct(X, Y) & in(X, Ys)
+
+union(nil, Y, Y)
+union(cons(X, Xs), Y, cons(X, Z)) :- ~in(X, Y) & union(Xs, Y, Z)
+
+get_uni_uvars(uconst(N), nil)
+get_uni_uvars(uvar(X), [X])
+get_uni_uvars(uadd(U, N), Uvars) :- get_uni_uvars(U, Uvars)
+get_uni_uvars(umax(U, V), Uvars) :- get_uni_uvars(U, U_U) & get_uni_uvars(V, U_V) & union(U_U, U_V, Uvars)
+
+get_arms_uvars(nil, nil)
+get_arms_uvars(cons(match.arm(Pattern, Body), Rest), Uvars) :- get_uvars(Body, U_Body) & get_arms_uvars(Rest, U_Rest) & union(U_Body, U_Rest, Uvars)
+
+get_args_uvars(nil, nil)
+get_args_uvars(cons(Arg, Rest), Uvars) :- get_uvars(Arg, U_Arg) & get_args_uvars(Rest, U_Rest) & union(U_Arg, U_Rest, Uvars)
+
+get_uvars(var(X), [])
+get_uvars(app(Fun, Arg), Uvars) :- get_uvars(Fun, U_Fun) & get_uvars(Arg, U_Arg) & union(U_Fun, U_Arg, Uvars)
+get_uvars(abs(X, Ty, Body), Uvars) :- get_uvars(Ty, U_Ty) & get_uvars(Body, U_Body) & union(U_Ty, U_Body, Uvars)
+get_uvars(pi(X, Ty, Body), Uvars) :- get_uvars(Ty, U_Ty) & get_uvars(Body, U_Body) & union(U_Ty, U_Body, Uvars)
+get_uvars(usort(U), Uvars) :- get_uni_uvars(U, Uvars)
+get_uvars(match(Target, Arms), Uvars) :- get_uvars(Target, U_Target) & get_arms_uvars(Arms, U_Arms) & union(U_Target, U_Arms, Uvars)
+get_uvars(constructor(Name, Args), Uvars) :- get_args_uvars(Args, Uvars)
+get_uvars(proj(Term, Field), Uvars) :- get_uvars(Term, Uvars)
+
+freshen_term(Term, Fresh) :- get_uvars(Term, Uvars) & fresh_uni_params(Term, Uvars, Fresh)
 
 %%%%%%%%%%%%%%
 %%% Type Inference
@@ -581,4 +603,12 @@ get_constr_args(Constr_Ty, nil) :- ~is_pi(Constr_Ty)
 %   | nil : List A
 %   | cons : A -> List A -> List B
 
-infer(proj(Term, Field), Ctx, Cod_Ty) :- infer(Term, Ctx, var(Struct_Name)) & make_proj_name(Struct_Name, Field, Proj_Name) & ctx.lookup_axiom(Ctx, Proj_Name, pi(X, Dom_Ty, Cod_Ty)) & def_eq(Dom_Ty, var(Struct_Name), Ctx)
+
+%% TODO: if struct takes parameters then the inferred type should be an application of var(Struct_Name) to the arguments
+get_struct_from_app(var(Struct), Struct, 0)
+get_struct_from_app(app(Fun, Arg), Struct, N) :- get_struct_from_app(Fun, Struct, M) & evaluate(plus(M, 1), N)
+
+strip_pi_from_proj(Proj_Dom, 0, Proj_Dom)
+strip_pi_from_proj(pi(X, Ty, Body), Num_Params, Ty) :- evaluate(minus(Num_Params, 1), N) & strip_pi_from_proj(Body, N, Ty)
+
+infer(proj(Term, Field), Ctx, Cod_Ty) :- infer(Term, Ctx, Ty) & get_struct_from_app(Ty, Struct_Name, Num_Params) & make_proj_name(Struct_Name, Field, Proj_Name) & ctx.lookup_axiom(Ctx, Proj_Name, pi(X, Dom_Ty, Cod_Ty)) & def_eq(Dom_Ty, var(Struct_Name), Ctx)
