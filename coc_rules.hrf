@@ -33,6 +33,12 @@ append_elt(cons(X, Xs), Y, cons(X, Zs)) :- append_elt(Xs, Y, Zs)
 rev(nil, nil)
 rev(cons(X, Xs), Ws) :-  rev(Xs, Zs) & append_elt(Zs, X, Ws)
 
+in(X, cons(X, Ys))
+in(X, cons(Y, Ys)) :- distinct(X, Y) & in(X, Ys)
+
+union(nil, Y, Y)
+union(cons(X, Xs), Y, cons(X, Z)) :- ~in(X, Y) & union(Xs, Y, Z)
+
 
 %%%%%%%%%%%%%%
 %%% Structure
@@ -165,29 +171,25 @@ map.contains(Map, Key) :- map.lookup(Map, Key, Val)
 
 %% Context interface
 
-%% TODO: fix the structure names in the context (eg. ctx.def)
-ctx.lookup_var(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Var, Term) :- map.lookup(Var_Map, Var, Term)
-ctx.extend_var(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Var, Term, ctx(New_Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx)) :- map.insert(Var_Map, Var, Term, New_Var_Map)
+ctx.lookup_var(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Var, Term) :- map.lookup(Var_Map, Var, Term)
+ctx.extend_var(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Var, Term, ctx(New_Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map)) :- map.insert(Var_Map, Var, Term, New_Var_Map)
 ctx.extend_vars(Ctx, nil, Ctx)
 ctx.extend_vars(Ctx, cons(parameter(Name, Ty), Rest), New_Ctx) :- ctx.extend_var(Ctx, Name, Ty, Inter_Ctx) & ctx.extend_vars(Inter_Ctx, Rest, New_Ctx)
 ctx.contains_var(Ctx, Var) :- ctx.lookup_var(Ctx, Var, Term)
 
-ctx.lookup_constr(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Term) :- map.lookup(Constr_Map, Name, Term)
-ctx.extend_constr(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Term, ctx(Var_Map, Uni_Map, New_Constr_Map, Axiom_Map, Def_Map, Uni_Ctx)) :- map.insert(Constr_Map, Name, Term, New_Constr_Map)
+ctx.lookup_constr(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Name, Term) :- map.lookup(Constr_Map, Name, Term)
+ctx.extend_constr(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Name, Term, ctx(Var_Map, Uni_Map, New_Constr_Map, Axiom_Map, Def_Map)) :- map.insert(Constr_Map, Name, Term, New_Constr_Map)
 ctx.contains_constr(Ctx, Name) :- ctx.lookup_constr(Ctx, Name, Term)
 
-ctx.lookup_axiom(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Axiom, Term) :- map.lookup(Axiom_Map, Axiom, Term)
-ctx.extend_axiom(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Axiom, Term, ctx(Var_Map, Uni_Map, Constr_Map, New_Axiom_Map, Def_Map, Uni_Ctx)) :- map.insert(Axiom_Map, Axiom, Term, New_Axiom_Map)
+ctx.lookup_axiom(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Axiom, Term) :- map.lookup(Axiom_Map, Axiom, Term)
+ctx.extend_axiom(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Axiom, Term, ctx(Var_Map, Uni_Map, Constr_Map, New_Axiom_Map, Def_Map)) :- map.insert(Axiom_Map, Axiom, Term, New_Axiom_Map)
 ctx.contains_axiom(Ctx, Axiom) :- ctx.lookup_axiom(Ctx, Axiom, Term)
 
-ctx.lookup_def(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Def) :- map.lookup(Def_Map, Name, Def)
-ctx.extend_def(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Name, Uni_Params, Ty, ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, New_Def_Map, Uni_Ctx)) :- map.insert(Def_Map, Name, ctx.def(Uni_Params, Ty), New_Def_Map)
+ctx.lookup_def(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Name, Def) :- map.lookup(Def_Map, Name, Def)
+ctx.extend_def(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map), Name, Uni_Params, Ty, ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, New_Def_Map)) :- map.insert(Def_Map, Name, ctx.def(Uni_Params, Ty), New_Def_Map)
 ctx.contains_def(Ctx, Name) :- ctx.lookup_def(Ctx, Name, Def)
 
-ctx.universe_ctx(ctx(Var_Map, Uni_Map, Constr_Map, Axiom_Map, Def_Map, Uni_Ctx), Uni_Ctx)
-
-
-ctx.nil(ctx(nil, nil, nil, nil, nil, nil))
+ctx.nil(ctx(nil, nil, nil, nil, nil))
 
 %%%%%%%%%%%%%%
 %%% Substitution
@@ -299,13 +301,6 @@ alpha_normalize_rec(match(Target, Arms), Db_Ctx, N, match(Db_Target, Db_Arms)) :
 alpha_normalize_rec(constructor(Name, Args), Db_Ctx, N, constructor(Name, Db_Args)) :- alpha_normalize_args(Args, Db_Ctx, N, Db_Args)
 alpha_normalize_rec(Term, Db_Ctx, N, Term) :- ~is_var(Term) & ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_usort(Term) & ~is_match(Term) & ~is_constructor(Term) & ~is_proj(Term)
 
-%% TODO: check that this behaves correctly for universes!
-%% TODO: finish this
-% alpha_normalize_uni(uconst(M), Db_Ctx, N, uconst(M))
-% alpha_normalize_uni(uvar(X), Db_Ctx, N, uvar(M)) :- map.lookup(Db_Ctx, X, M)
-% alpha_normalize_uni(uadd(U, M), Db_Ctx, N, uadd(Db_U, M)) :- alpha_normalize_uni(U, Db_Ctx, N, Db_U)
-% alpha_normalize_uni(umax(U, V), Db_Ctx, N, umax)
-
 alpha_normalize(Term, Db_Term) :- alpha_normalize_rec(Term, nil, 0, Db_Term)
 
 alpha_equiv(Term1, Term2) :- alpha_normalize(Term1, Db) & alpha_normalize(Term2, Db)
@@ -363,27 +358,9 @@ alpha_bounded_normalize(Term, Db_Term) :- alpha_bounded_normalize_rec(Term, nil,
 
 % TODO this appears to work! test -> alpha_normalize_rec, alpha_test -> alpha_normalize
 
-
-%%%%%%%%%%%%%%
-%%% Unification
-%%%%%%%%%%%%%%
-
-
-%% TODO: I think alpha conversion to debruijn needs to be guaranteed before attempts to unify; maybe handle this during parsing? jk just do this in the calls to unify (eg alpha -> unify)
-
-% unify(Term1, Term2) :- is_term(Term1) & is_term(Term2) & alpha_equiv(Term1, Term2) %% TODO: is this correct?
-
-% unify(Term1, Term2) :- is_pi(Term1) & is_pi(Term2) & alpha_equiv(Term1, Term2)
-% unify(Term1, Term2) :- is_var(Term1) & is_var(Term2) & alpha_equiv(Term1, Term2)
-% unify(Term1, Term2) :- is_usort(Term1) & is_usort(Term2) & alpha_equiv(Term1, Term2)
-% unify(Term1, Term2) :- is_term(Term1) & is_term(Term2) & alpha_equiv(Term1, Term2)
-
 unify(Term1, Term2) :- alpha_bounded_normalize(Term1, Db_Term1) & alpha_bounded_normalize(Term2, Db_Term2) & universe.solve(Db_Term1, Db_Term2)
 unify(Term1, Term2) :- alpha_bounded_normalize(Term2, Db_Term2) & alpha_bounded_normalize(Term1, Db_Term1) & universe.solve(Db_Term2, Db_Term1)
 
-%% TODO ^
-
-% unify(abs("x", U, var("x")), abs("y", pi("a", usort(uconst(1)), var("a")), var("y")))
 
 %%%%%%%%%%%%%%
 %%% Type Checking
@@ -423,46 +400,32 @@ check_declaration(axiom(Name, cons(Uni, Rest), Ty), Ctx, New_Ctx) :- infer(Ty, C
 %% Check definition
 check_declaration(def(Name, nil, Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & infer(Ty, Uni_Var_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_pi_type(Params, Ty, Def_Ty) & ctx.extend_axiom(Uni_Var_Ctx, Name, Def_Ty, Rec_Ctx) & make_abs(Params, Body, Lambda) & check(Lambda, Def_Ty, Rec_Ctx) & ctx.extend_axiom(Ctx, Name, Def_Ty, New_Ctx)
 
-%% TODO: I don't think we need the universe context here actually??
-%check_declaration(def(Name, cons(Uni, Uni_Params), Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & infer(Ty, Uni_Var_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_pi_type(Params, Ty, Def_Ty) & ctx.extend_axiom(Uni_Var_Ctx, Name, Def_Ty, Rec_Ctx) & make_abs(Params, Body, Lambda) & check(Lambda, Def_Ty, Rec_Ctx) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Ty, New_Ctx)
 check_declaration(def(Name, cons(Uni, Uni_Params), Params, Ty, Body), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & infer(Ty, Uni_Var_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_pi_type(Params, Ty, Def_Ty) & ctx.extend_axiom(Uni_Var_Ctx, Name, Def_Ty, Rec_Ctx) & make_abs(Params, Body, Lambda) & check(Lambda, Def_Ty, Rec_Ctx) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Def_Ty, New_Ctx)
-%% TODO: ctx.extend_unis
-
-% def("t_lower",["u_lower"],[],usort(uvar("u_lower")),usort(uconst(1)))
 
 %% Check inductive
 check_declaration(inductive(Name, nil, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_axiom(Ctx, Name, Ind_Ty, Ext_Ctx) & ctx.extend_axiom(Uni_Var_Ctx, Name, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, nil, Params, New_Ctx)
 
-
-%% TODO: same here, no need for extend_unis
-%check_declaration(inductive(Name, Uni_Params, Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_unis(Ctx, cons(Uni, Uni_Params), Uni_Ctx) & ctx.extend_vars(Uni_Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, Uni_Params, Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
 check_declaration(inductive(Name, cons(Uni, Uni_Params), Params, Ty, Constrs), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Uni_Var_Ctx) & make_pi_type(Params, Ty, Ind_Ty) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Ind_Ty, Ext_Ctx) & ctx.extend_def(Uni_Var_Ctx, Name, cons(Uni, Uni_Params), Ind_Ty, Ext_UV_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, cons(Uni, Uni_Params), Params, New_Ctx)
 
 
 check_constrs(nil, Ctx, UV_Ctx, Uni_Params, Params, Ctx)
 check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, nil, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.extend_constr(Ctx, Name, Constr_Ty, Inter_Ctx) & check_constrs(Rest, Inter_Ctx, UV_Ctx, nil, Params, New_Ctx)
-check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, Uni_Params, Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.extend_def(Ctx, Name, Uni_Params, Constr_Ty, Inter_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, Uni_Params, Params, New_Ctx)
+check_constrs(cons(constructor(Name, Ty), Rest), Ctx, UV_Ctx, cons(Uni, Uni_Params), Params, New_Ctx) :- infer(Ty, UV_Ctx, Constr_Sort) & is_type(Constr_Sort) & make_pi_type(Params, Ty, Constr_Ty) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Constr_Ty, Inter_Ctx) & check_constrs(Constrs, Ext_Ctx, Ext_UV_Ctx, cons(Uni, Uni_Params), Params, New_Ctx)
 
 %% Check structure
-%% TODO: we are not handling universe parameters properly here!
+%% TODO: we are not handling (universe) parameters properly here!
+%% TODO: in general, structs with parameters do not typecheck properly since we are trying to unify the struct type with a pi type. This requires deeper thought.
 check_declaration(struct(Name, nil, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Name, Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
 check_declaration(struct(Name, cons(Uni, Uni_Params), Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_def(Ctx, Name, cons(Uni, Uni_Params), Struct_Ty, Ext_Ctx) & check_fields(Name, Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
 
 check_fields(Struct_Name, nil, Params, Param_Ctx, Ctx, Ctx)
 check_fields(Struct_Name, cons(field(Name, Ty), Rest), Params, Param_Ctx, Ctx, New_Ctx) :- infer(Ty, Param_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_app(var(Struct_Name), Params, App) & make_pi_type(Params, pi("struct_param", App, Ty), Proj_Ty) & make_proj_name(Struct_Name, Name, Proj_Name) &  ctx.extend_axiom(Ctx, Proj_Name, Proj_Ty, Inter_Ctx) & check_fields(Struct_Name, Rest, Params, Param_Ctx, Inter_Ctx, New_Ctx)
-% ^^^ TODO: we are ending up with types that have the form pi(struct_param, field_name, ...) which is obviously a no go
+%% ^^^ TODO: we are ending up with types that have the form pi(struct_param, field_name, ...) which is obviously a no go
 
 make_proj_name(Struct_Name, Field_Name, Proj_Name) :- evaluate(stringappend(Struct_Name, "."), Struct_Dot) & evaluate(stringappend(Struct_Dot, Field_Name), Proj_Name)
-
 %% TODO ^ see above, compare with below (bug somewhere)
 
-%check_declaration(struct(Name, Uni_Params, Params, Ty, Fields), Ctx, New_Ctx) :- ctx.extend_vars(Ctx, Params, Params_Ctx) & make_pi_type(Params, Ty, Struct_Ty) & ctx.extend_axiom(Ctx, Name, Struct_Ty, Ext_Ctx) & check_fields(Fields, Params, Param_Ctx, Ext_Ctx, New_Ctx)
-%
-%check_fields(nil, Params, Param_Ctx, Ctx, Ctx)
-%check_fields(cons(field(Name, Ty), Rest), Params, Param_Ctx, Ctx, New_Ctx) :- infer(Ty, Param_Ctx, Sort_Ty) & is_type(Sort_Ty) & make_app(Name, Params, App) & make_pi_type(Params, pi("struct_param", App, Ty), Proj_Ty) & ctx.extend_axiom(Ctx, Name, Proj_Ty, Inter_Ctx) & check_fields(Rest, Params, Param_Ctx, Inter_Ctx, New_Ctx)
-
 %% Check terms
-
 check(abs(X, Ty, Body), pi(Y, Expected_Ty, Expected_Body), Ctx) :- def_eq(Ty, Expected_Ty, Ctx) & ctx.extend_var(Ctx, X, Ty, Ext_Ctx) & substitute(Y, var(X), Expected_Body, R_Expected_Body) & check(Body, R_Expected_Body, Ext_Ctx)
 check(Term, Expected_Ty, Ctx) :- ~is_abs(Term) & infer(Term, Ctx, Inferred_Ty) & freshen_term(Inferred_Ty, Inferred_Fresh) & freshen_term(Expected_Ty, Expected_Fresh) & def_eq(Inferred_Fresh, Expected_Fresh, Ctx)
 
@@ -602,7 +565,13 @@ get_constr_args(Constr_Ty, nil) :- ~is_pi(Constr_Ty)
 % inductive List (A : Type) : Type where
 %   | nil : List A
 %   | cons : A -> List A -> List B
-
+% ctx.nil(Ctx) & check_declaration(inductive("list_upper",[],[parameter("a_upper",usort(uconst(1)))],usort(uconst(1)),[constructor("nil_lower",app(var("list_upper"),var("a_upper"))),constructor("cons_lower",pi(var("_"),var("a_upper"),pi(var("_"),app(var("list_upper"),var("b_upper")),app(var("list_upper"),var("b_upper")))))]), Ctx, X)
+%constructor(
+%    "cons_lower",
+%    pi(var("_"),var("a_upper"),
+%        pi(var("_"),app(var("list_upper"),var("b_upper")),
+%            app(var("list_upper"),var("b_upper")))))
+% inductive(Name, cons(Uni, Uni_Params), Params, Ty, Constrs)
 
 %% TODO: if struct takes parameters then the inferred type should be an application of var(Struct_Name) to the arguments
 get_struct_from_app(var(Struct), Struct, 0)
