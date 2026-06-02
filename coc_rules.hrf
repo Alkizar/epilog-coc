@@ -25,6 +25,8 @@
 empty(nil)
 refl(X, X)
 
+len(Xs, N) :- evaluate(length(Xs), N)
+
 eq_len(Xs, Ys) :- evaluate(length(Xs), N) & evaluate(length(Ys), N)
 
 append_elt(nil, Y, [Y])
@@ -306,8 +308,9 @@ alpha_normalize(Term, Db_Term) :- alpha_normalize_rec(Term, nil, 0, Db_Term)
 alpha_equiv(Term1, Term2) :- alpha_normalize(Term1, Db) & alpha_normalize(Term2, Db)
 
 %% app(Fun, Arg)
-normalize(app(Fun, Arg), Ctx, app(Nf_Fun, Nf_Arg)) :- normalize(Fun, Ctx, Nf_Fun) & normalize(Arg, Ctx, Nf_Arg) & ~is_abs(Nf_Fun)
 normalize(app(Fun, Arg), Ctx, Nf) :- normalize(Fun, Ctx, abs(Nf_X, Nf_Ty, Nf_Body)) & normalize(Arg, Ctx, Nf_Arg) & substitute(Nf_X, Nf_Arg, Nf_Body, Nf)
+normalize(app(Fun, Arg), Ctx, Nf) :- normalize(Fun, Ctx, pi(Nf_X, Nf_Ty, Nf_Body)) & normalize(Arg, Ctx, Nf_Arg) & substitute(Nf_X, Nf_Arg, Nf_Body, Nf)
+normalize(app(Fun, Arg), Ctx, app(Nf_Fun, Nf_Arg)) :- normalize(Fun, Ctx, Nf_Fun) & normalize(Arg, Ctx, Nf_Arg) & ~is_abs(Nf_Fun) & ~is_pi(Nf_Fun)
 
 %% abs(X, Ty, Body) 
 normalize(abs(X, Ty, Body), Ctx, Nf_Fun) :- normalize(Ty, Ctx, Nf_Ty) & ctx.extend_var(Ctx, X, Nf_Ty, Ext_Ctx) & normalize(Body, Ext_Ctx, app(Nf_Fun, var(Nf_Var))) & ~occurs_free(Nf_Var, Nf_Fun)
@@ -319,7 +322,8 @@ normalize(pi(X, Ty, Body), Ctx, pi(X, Nf_Ty, Nf_Body)) :- normalize(Ty, Ctx, Nf_
 
 %% var(X)
 normalize(var(X), Ctx, Def) :- ctx.lookup_axiom(Ctx, X, Def)
-normalize(var(X), Ctx, var(X)) :- ~ctx.contains_axiom(Ctx, X)
+normalize(var(X), Ctx, Def) :- ~ctx.contains_axiom(Ctx, X) & ctx.lookup_def(Ctx, X, ctx.def(Uni_Params, Def)) %% TODO
+normalize(var(X), Ctx, var(X)) :- ~ctx.contains_axiom(Ctx, X) & ~ctx.contains_def(Ctx, X)
 
 %% Other terms
 normalize(Term, Ctx, Term) :- ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_var(Term)
@@ -553,31 +557,76 @@ apply_spec(Ty, cons(Ty_Param, Rest_Param), cons(Ty_Arg, Rest_Arg), Spec_Ty) :- ~
 get_constr_out(pi(X, Ty, Body), Out_Ty) :- get_constr_out(Body, Out_Ty)
 get_constr_out(Constr_Ty, Constr_Ty) :- ~is_pi(Constr_Ty)
 
-% TODO: this is backwards, need to push types when they are NOT type params; see extract_constructor_args
-%% TODO: fixed the above, check that this now works
 get_constr_args(pi(X, usort(U), Body), Arg_Tys) :- get_constr_args(Body, Arg_Tys)
 get_constr_args(pi(X, Ty, Body), cons(Ty, Arg_Tys)) :- ~is_usort(Ty) & get_constr_args(Body, Arg_Tys)
 get_constr_args(Constr_Ty, nil) :- ~is_pi(Constr_Ty)
-
-%% TODO: allow parser to discard trailing whitespace before EoF
-
-%% TODO: investigate why the following typechecks:
-% inductive List (A : Type) : Type where
-%   | nil : List A
-%   | cons : A -> List A -> List B
-% ctx.nil(Ctx) & check_declaration(inductive("list_upper",[],[parameter("a_upper",usort(uconst(1)))],usort(uconst(1)),[constructor("nil_lower",app(var("list_upper"),var("a_upper"))),constructor("cons_lower",pi(var("_"),var("a_upper"),pi(var("_"),app(var("list_upper"),var("b_upper")),app(var("list_upper"),var("b_upper")))))]), Ctx, X)
-%constructor(
-%    "cons_lower",
-%    pi(var("_"),var("a_upper"),
-%        pi(var("_"),app(var("list_upper"),var("b_upper")),
-%            app(var("list_upper"),var("b_upper")))))
-% inductive(Name, cons(Uni, Uni_Params), Params, Ty, Constrs)
 
 %% TODO: if struct takes parameters then the inferred type should be an application of var(Struct_Name) to the arguments
 get_struct_from_app(var(Struct), Struct, 0)
 get_struct_from_app(app(Fun, Arg), Struct, N) :- get_struct_from_app(Fun, Struct, M) & evaluate(plus(M, 1), N)
 
-strip_pi_from_proj(Proj_Dom, 0, Proj_Dom)
-strip_pi_from_proj(pi(X, Ty, Body), Num_Params, Ty) :- evaluate(minus(Num_Params, 1), N) & strip_pi_from_proj(Body, N, Ty)
+%strip_pi_from_proj(Proj_Dom, 0, Proj_Dom)
+%strip_pi_from_proj(pi(X, Ty, Body), Num_Params, Ty) :- evaluate(minus(Num_Params, 1), N) & strip_pi_from_proj(Body, N, Ty)
 
-infer(proj(Term, Field), Ctx, Cod_Ty) :- infer(Term, Ctx, Ty) & get_struct_from_app(Ty, Struct_Name, Num_Params) & make_proj_name(Struct_Name, Field, Proj_Name) & ctx.lookup_axiom(Ctx, Proj_Name, pi(X, Dom_Ty, Cod_Ty)) & def_eq(Dom_Ty, var(Struct_Name), Ctx)
+collect_struct_parameters(Struct, Ctx, Struct_Params) :- ctx.lookup_axiom(Ctx, Struct, Struct_Ty) & get_pi_params(Struct_Ty, Struct_Params)
+collect_struct_parameters(Struct, Ctx, Struct_Params) :- ~ctx.contains_axiom(Ctx, Struct) & ctx.lookup_def(Ctx, Struct, ctx.def(Uni_Params, Struct_Ty)) & get_pi_params(Struct_Ty, Struct_Params)
+
+get_pi_params(pi(X, Ty, Body), cons(parameter(X, Ty), Rest)) :- get_pi_params(Body, Rest)
+get_pi_params(Term, nil) :- ~is_pi(Term)
+
+%infer(proj(Term, Field), Ctx, Cod_Ty) :- infer(Term, Ctx, Ty) & get_struct_from_app(Ty, Struct_Name, Num_Params) & make_proj_name(Struct_Name, Field, Proj_Name) & ctx.lookup_axiom(Ctx, Proj_Name, pi(X, Dom_Ty, Cod_Ty)) & def_eq(Dom_Ty, var(Struct_Name), Ctx)
+
+% map.entry("s_upper.f_lower",pi("x_lower",usort(uconst(1)),pi("struct_param",app(var("s_upper"),var("x_lower")),var("x_lower"))))
+% when checking test.f : A, need to deduce that test : app(S, A), then extract S and form S.f, look up S.f which will be pi(x, Ty, Expected_Proj_Pi) 
+% where each instance of x in Expected_Proj_Pi must be replaced with A.
+
+% 1. break down app(S, A) into the struct name S and the arguments [Arg1, ...] = [A,...].
+% 2. make the projection name S.f
+% 3. look up S.f, get back pi(Param1, Ty1, pi(Param2, Ty2, ..., pi(ParamN, TyN, Expected_Proj_Pi)))
+% 4. look up S in axioms/defs, and collect the parameters of S. Strip that many pis from the type of S.f to get Expected_Proj_Pi
+% 5. substitute Parami -> Argi in Expected_Proj_Pi to form Proj_Ty
+% 6. break down Proj_Ty = pi(struct_param, Dom, Cod)
+% 7. expect Dom = app(S, Arg1, ..., ArgN)
+% 8. Infer type as Cod
+
+% check_declaration(def("y_lower",[],[],var("a_upper"),proj(var("test_lower"),"f_lower")), ctx([],[],[],[map.entry("s_upper",pi("x_lower",usort(uconst(1)),usort(uconst(1)))),map.entry("s_upper.f_lower",pi("x_lower",usort(uconst(1)),pi("struct_param",app(var("s_upper"),var("x_lower")),var("x_lower")))),map.entry("a_upper",usort(uconst(1))),map.entry("test_lower",app(var("s_upper"),var("a_upper")))],[]), New_Ctx)
+
+apply_pi(pi(X, Ty, Body), Term, Ctx, Sub_Body) :- check(Term, Ty, Ctx) & substitute(X, Term, Ty, Sub_Ty) & substitute(X, Term, Body, Sub_Body)
+
+apply_pi_all(Ty, nil, Ctx, Ty)
+apply_pi_all(Pi_Ty, cons(Arg, Rest), Ctx, Sub_Ty) :- apply_pi(Pi_Ty, Arg, Ctx, Inter_Ty) & apply_pi_all(Inter_Ty, Rest, Ctx, Sub_Ty)
+
+decouple_struct_args(var(Struct), Struct, nil)
+decouple_struct_args(app(Struct_Fun, Arg), Struct, cons(Arg, Args)) :- decouple_struct_args(Struct_Fun, Struct, Args)
+
+
+infer(proj(Term, Field), Ctx, Cod_Ty) :- infer(Term, Ctx, Ty) & decouple_struct_args(Ty, Struct_Name, Struct_Args) & ctx.lookup_axiom(Ctx, Struct_Name, Struct_Ty) & 
+    make_proj_name(Struct_Name, Field, Proj_Name) & ctx.lookup_axiom(Ctx, Proj_Name, Proj_Ty) &
+    apply_pi_all(Struct_Ty, Struct_Args, Ctx, Sub_Struct_Ty) & apply_pi_all(Proj_Ty, Struct_Args, Ctx, pi(X, Dom_Ty, Cod_Ty)) &
+    def_eq(Dom_Ty, Sub_Struct_Ty, Ctx)
+
+infer(proj(Term, Field), Ctx, Cod_Ty) :- infer(Term, Ctx, Ty) & decouple_struct_args(Ty, Struct_Name, Struct_Args) & ~ctx.contains_axiom(Ctx, Struct_Name, Struct_Ty) & 
+    ctx.lookup_def(Ctx, Struct_Name, ctx.def(Uni_Params, Struct_Ty)) & make_proj_name(Struct_Name, Field, Proj_Name) & 
+    ctx.lookup_axiom(Ctx, Proj_Name, Proj_Ty) & fresh_uni_params(Struct_Ty, Uni_Params, Fresh_Ty) & %ctx.lookup_def(Ctx, Name, ctx.def(Uni_Params, Ty)) & fresh_uni_params(Ty, Uni_Params, New_Ty)
+    apply_pi_all(Fresh_Ty, Struct_Args, Ctx, Sub_Struct_Ty) & apply_pi_all(Proj_Ty, Struct_Args, Ctx, pi(X, Dom_Ty, Cod_Ty)) &
+    fresh_uni_params(Dom_Ty, Uni_Params, Fresh_Dom_Ty) & def_eq(Fresh_Dom_Ty, Sub_Struct_Ty, Ctx) % TODO: Dom_Ty needs to be normalized *before* we freshen the uni params, since syntactically it has the form app(struct_name, args...) which doesn't contain the uni_params until we substitute the def of struct
+
+% apply_pi(pi("x_lower",usort(uconst(1)),usort(uconst(1))), var("a_upper"), ctx([],[],[],[map.entry("s_upper",pi("x_lower",usort(uconst(1)),usort(uconst(1)))),map.entry("s_upper.f_lower",pi("x_lower",usort(uconst(1)),pi("struct_param",app(var("s_upper"),var("x_lower")),var("x_lower")))),map.entry("a_upper",usort(uconst(1))),map.entry("test_lower",app(var("s_upper"),var("a_upper")))],[]), X)
+
+%struct S.{u} (x : Sort u) : Sort u where
+%  (f : x)
+%
+%axiom A : Type
+%axiom test : S A
+%def y : A := test.f
+
+%struct S.{u, v} (A : Sort u) (B : Sort v) : Sort max(u, v) where
+%  (f : A)
+%  (g : B)
+%
+%axiom a : Type
+%axiom b : Type
+%
+%axiom test : S a b
+%
+%def y : a := test.f

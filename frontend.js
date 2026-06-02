@@ -94,7 +94,7 @@ function renderGutter(totalLines, declarations) {
             row.className = "gutter-failure";
         }
 
-        row.textContent = status.get(line) ?? "";
+        row.textContent = status.get(line) ?? ""; //line;
 
         gutter.appendChild(row);
     }
@@ -112,6 +112,7 @@ button.addEventListener('click', () => {
         
         var ctx = grind(compfindx(read("Ctx"), read("ctx.nil(Ctx)"), lambda, library));
         for (let i = 0; i < ast.length; i++) {
+            console.log("check_declaration(" + ast[i] + ", " + ctx + ", New_Ctx)")
             var result = compfindx(read("New_Ctx"), read("check_declaration(" + ast[i] + ", " + ctx + ", New_Ctx)"), lambda, library);
 
             if (result === false) {
