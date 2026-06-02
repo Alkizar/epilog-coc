@@ -45,10 +45,8 @@ Declaration
   	{ return { declaration: make_constructor('def', name, make_list(uni_params), make_list(params), type, body), location: location() }; }
   / "inductive" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ constructors:Constructor+
   	{ return { declaration: make_constructor("inductive", name, make_list(uni_params), make_list(params), type, make_list(constructors)), location: location() }; }
-  /*/ "struct" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ fields:Field+
-  	{ return { declaration: make_constructor("struct", name, make_list(uni_params), make_list(params), type, make_list(fields)), location: location() }; }*/
-  / "struct" _ name:Id _? ":" _? type:Term _ "where" _ fields:Field+
-  	{ return { declaration: make_constructor("struct", name, make_list([]), make_list([]), type, make_list(fields)), location: location() }; } // TODO: parameters for structs are proving difficult to typecheck. Disable for now.
+  / "struct" _ name:Id uni_params:UniParams? _? params:Parameters _? ":" _? type:Term _ "where" _ fields:Field+
+  	{ return { declaration: make_constructor("struct", name, make_list(uni_params), make_list(params), type, make_list(fields)), location: location() }; }
 
 UniParams
   = ".{" head:Id _? tail:TailParams* "}" { return [head].concat(tail); }
@@ -133,7 +131,7 @@ App
 
 Atom
   = x:Id { return make_constructor("var", x); }
-  / "Sort" " "+ level:UniverseExpr { return make_sort(level); } // TODO -- do we want parens or something?
+  / "Sort" " "+ level:UniverseExpr { return make_sort(level); }
   / "Type " _? n:Natural?
   	{
     	if (n === null) {

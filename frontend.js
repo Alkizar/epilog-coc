@@ -1,7 +1,5 @@
 import { parse } from "./parser.js";
 
-// TODO: rename this file
-
 const button = document.getElementById('checkButton');
 const input = document.getElementById('input');
 const output = document.getElementById('output');
@@ -17,9 +15,8 @@ async function initialize() {
     definerules(library, rules);
 }
 
-////////////
+// Compute the initial number of gutter entries to generate when the page loads.
 const style = getComputedStyle(input);
-
 const lineHeight = parseFloat(style.lineHeight);
 
 const paddingTop = parseFloat(style.paddingTop);
@@ -31,9 +28,11 @@ const visibleHeight =
 const visibleRows =
     Math.floor(visibleHeight / lineHeight) + 2;
 
+// Global variable holding the number of rows to generate gutter entries for.
+// This should be updated as the textarea expands.
 var totalRows = visibleRows;
-//////////
 
+// Resets the gutter.
 function clearGutter() {
     renderGutter(totalRows, []);
 }
@@ -62,14 +61,19 @@ input.addEventListener('keydown', function(e) {
         this.selectionStart = start + tab_output.length;
         this.selectionEnd = start + tab_output.length;
     } else if (e.key == 'Enter') {
+        // Add a new row to the gutter and regenerate it.
         totalRows++;
         clearGutter();
     }
 
+    // Substitute mathematical symbols for lambda and pi, using the appropriate
+    // shortcuts.
     input.value = input.value.replaceAll("\\lam", "λ");
     input.value = input.value.replaceAll("\\pi", "Π");
 });
 
+// Renders the results gutter to the left of the textarea, for displaying
+// typecheck results. TODO: add line numbers.
 function renderGutter(totalLines, declarations) {
     const status = new Map();
 
@@ -82,11 +86,11 @@ function renderGutter(totalLines, declarations) {
 
     gutter.innerHTML = "";
 
-
     for (let line = 1; line <= totalLines + 1; line++) {
         const row = document.createElement("div");
 
-        if (status.get(line) === undefined) { // TODO: this is inelegant, find a better way
+        // TODO: this is inelegant, find a better way to do this.
+        if (status.get(line) === undefined) {
             row.className = "gutter-line";
         } else if (status.get(line) === "✓") {
             row.className = "gutter-success";
@@ -94,29 +98,32 @@ function renderGutter(totalLines, declarations) {
             row.className = "gutter-failure";
         }
 
-        row.textContent = status.get(line) ?? ""; //line;
+        row.textContent = status.get(line) ?? "";
 
         gutter.appendChild(row);
     }
 }
 
+// Typecheck logic.
 button.addEventListener('click', () => {
     try {
         const inputText = input.value;
         const parseData = parse(inputText);
         const ast = parseData.ast;
-        const locations = parseData.locations; // TODO: remove unnecessary data from this
+        const locations = parseData.locations; // TODO: remove unnecessary data from this.
         totalRows = Math.max(inputText.split("\n").length + 1, totalRows);
 
+        // A list of any typechecking errors encountered.
         var typeErrors = []
         
+        // Typecheck each declaration separately. This is to allow for some error
+        // recovery and better error reporting.
         var ctx = grind(compfindx(read("Ctx"), read("ctx.nil(Ctx)"), lambda, library));
         for (let i = 0; i < ast.length; i++) {
-            console.log("check_declaration(" + ast[i] + ", " + ctx + ", New_Ctx)")
             var result = compfindx(read("New_Ctx"), read("check_declaration(" + ast[i] + ", " + ctx + ", New_Ctx)"), lambda, library);
 
             if (result === false) {
-                // Failed to typecheck; do not add to context, proceed to attempt to typecheck remainder of file
+                // Failed to typecheck; do not add to context, proceed to attempt to typecheck remainder of file.
                 console.log(`Failed to resolve a type for declaration ${i}. Restoring context and attempting to typecheck remaining declarations...`);
                 locations[i].result = false;
                 typeErrors.push(locations[i].start.line);
@@ -126,8 +133,10 @@ button.addEventListener('click', () => {
             }
         }
 
+        // Render the results.
         renderGutter(totalRows, locations);
 
+        // Generate messages for any typechecking errors that were encountered.
         if (typeErrors.length === 1) {
             status.textContent = `Failed to typecheck line ${typeErrors[0]}.`;
         } else if (typeErrors.length === 2) {
