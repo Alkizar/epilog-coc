@@ -9,3 +9,7 @@ def add (n : Nat) (m : Nat) : Nat := match n with
 def delta (n : Nat) : Nat := match n with
   | zero => zero
   | succ(_) => succ zero
+
+def mul (n : Nat) (m : Nat) : Nat := match n with
+  | zero => zero
+  | succ(k) => add (mul k m) m

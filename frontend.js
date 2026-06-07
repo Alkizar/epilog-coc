@@ -120,6 +120,7 @@ button.addEventListener('click', () => {
         // recovery and better error reporting.
         var ctx = grind(compfindx(read("Ctx"), read("ctx.nil(Ctx)"), lambda, library));
         for (let i = 0; i < ast.length; i++) {
+            console.log("check_declaration(" + ast[i] + ", " + ctx + ", New_Ctx)");
             var result = compfindx(read("New_Ctx"), read("check_declaration(" + ast[i] + ", " + ctx + ", New_Ctx)"), lambda, library);
 
             if (result === false) {

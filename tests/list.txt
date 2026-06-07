@@ -1,3 +1,7 @@
-inductive List.{u} (A : Sort (u+1)) : (Sort (u+1)) where
+inductive List (A : Type) : Type where
   | nil : List A
   | cons : A -> List A -> List A
+
+def map (A : Type) (B : Type) (f : A -> B) (l : List A) : List B := match l with 
+  | nil => nil B
+  | cons(x, xs) => cons B (f x) (map A B f xs)

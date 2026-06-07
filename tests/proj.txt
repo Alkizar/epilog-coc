@@ -7,8 +7,8 @@ struct Pair : Type where
 
 axiom pair_elt : Pair
 
-def test_proj_fst : Left := pair_elt.fst
-def test_proj_snd : Right := pair_elt.snd
+def elt_proj_fst : Left := pair_elt.fst
+def elt_proj_snd : Right := pair_elt.snd
 
 def fst_map (x : Pair) : Left := x.fst
 def snd_map (x : Pair) : Right := x.snd

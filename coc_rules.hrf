@@ -490,14 +490,10 @@ alpha_normalize(Term, Db_Term) :- alpha_normalize_rec(Term, nil, 0, Db_Term)
 %  to renaming bound variables).
 alpha_equiv(Term1, Term2) :- alpha_normalize(Term1, Db) & alpha_normalize(Term2, Db)
 
-%% Term normalization. Currently performs beta-reduction on lambda/pi types,
+%% Term normalization. Currently performs beta-reduction on lambda types,
 %  eta-reduction on lambda types, and unfolds definitions.
-normalize(app(Fun, Arg), Ctx, Nf) :- normalize(Fun, Ctx, abs(Nf_X, Nf_Ty, Nf_Body)) & 
-    normalize(Arg, Ctx, Nf_Arg) & substitute(Nf_X, Nf_Arg, Nf_Body, Nf)
-normalize(app(Fun, Arg), Ctx, Nf) :- normalize(Fun, Ctx, pi(Nf_X, Nf_Ty, Nf_Body)) & 
-    normalize(Arg, Ctx, Nf_Arg) & substitute(Nf_X, Nf_Arg, Nf_Body, Nf)
-normalize(app(Fun, Arg), Ctx, app(Nf_Fun, Nf_Arg)) :- normalize(Fun, Ctx, Nf_Fun) & 
-    normalize(Arg, Ctx, Nf_Arg) & ~is_abs(Nf_Fun) & ~is_pi(Nf_Fun)
+normalize(app(Fun, Arg), Ctx, app(Nf_Fun, Nf_Arg)) :- normalize(Fun, Ctx, Nf_Fun) & normalize(Arg, Ctx, Nf_Arg) & ~is_abs(Nf_Fun)
+normalize(app(Fun, Arg), Ctx, Nf) :- normalize(Fun, Ctx, abs(Nf_X, Nf_Ty, Nf_Body)) & normalize(Arg, Ctx, Nf_Arg) & substitute(Nf_X, Nf_Arg, Nf_Body, Nf)
 
 normalize(abs(X, Ty, Body), Ctx, Nf_Fun) :- normalize(Ty, Ctx, Nf_Ty) & ctx.extend_var(Ctx, X, Nf_Ty, Ext_Ctx) & 
     normalize(Body, Ext_Ctx, app(Nf_Fun, var(Nf_Var))) & ~occurs_free(Nf_Var, Nf_Fun)
@@ -510,8 +506,7 @@ normalize(pi(X, Ty, Body), Ctx, pi(X, Nf_Ty, Nf_Body)) :- normalize(Ty, Ctx, Nf_
     ctx.extend_var(Ctx, X, Nf_Ty, Ext_Ctx) & normalize(Body, Ext_Ctx, Nf_Body)
 
 normalize(var(X), Ctx, Def) :- ctx.lookup_axiom(Ctx, X, Def)
-normalize(var(X), Ctx, Def) :- ~ctx.contains_axiom(Ctx, X) & ctx.lookup_def(Ctx, X, ctx.def(Uni_Params, Def))
-normalize(var(X), Ctx, var(X)) :- ~ctx.contains_axiom(Ctx, X) & ~ctx.contains_def(Ctx, X)
+normalize(var(X), Ctx, var(X)) :- ~ctx.contains_axiom(Ctx, X)
 
 normalize(Term, Ctx, Term) :- ~is_app(Term) & ~is_abs(Term) & ~is_pi(Term) & ~is_var(Term)
 
